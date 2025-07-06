@@ -1,0 +1,3 @@
+[submodule "packages/twenty-server/src/ai-agent/implementation"]
+	path = packages/twenty-server/src/ai-agent/implementation
+	url = https://github.com/albasyir-group/twenty-one.git

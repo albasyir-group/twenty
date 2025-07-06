@@ -29,6 +29,7 @@ import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { ModulesModule } from 'src/modules/modules.module';
 
+import { AgentImplModule } from 'src/ai-agent/ai-agent.module';
 import { ClickHouseModule } from './database/clickHouse/clickHouse.module';
 import { CoreEngineModule } from './engine/core-modules/core-engine.module';
 import { I18nModule } from './engine/core-modules/i18n/i18n.module';
@@ -69,6 +70,8 @@ const MIGRATED_REST_METHODS = [
     DataSourceModule,
     MiddlewareModule,
     WorkspaceMetadataCacheModule,
+    // AI Agentic
+    AgentImplModule,
     // I18n module for translations
     I18nModule,
     // Conditional modules
@@ -96,6 +99,8 @@ export class AppModule {
       modules.push(MessageQueueModule.registerExplorer());
     }
     */
+
+    
 
     return modules;
   }
