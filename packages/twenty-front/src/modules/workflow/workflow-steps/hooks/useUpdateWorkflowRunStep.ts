@@ -6,14 +6,14 @@ import { useGetRecordFromCache } from '@/object-record/cache/hooks/useGetRecordF
 import { updateRecordFromCache } from '@/object-record/cache/utils/updateRecordFromCache';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { UPDATE_WORKFLOW_RUN_STEP } from '@/workflow/graphql/mutations/updateWorkflowRunStep';
-import { WorkflowRun } from '@/workflow/types/Workflow';
+import { type WorkflowRun } from '@/workflow/types/Workflow';
 import { useMutation } from '@apollo/client';
 import { isDefined } from 'twenty-shared/utils';
 import {
-  UpdateWorkflowRunStepInput,
-  UpdateWorkflowRunStepMutation,
-  UpdateWorkflowRunStepMutationVariables,
-  WorkflowAction,
+  type UpdateWorkflowRunStepInput,
+  type UpdateWorkflowRunStepMutation,
+  type UpdateWorkflowRunStepMutationVariables,
+  type WorkflowAction,
 } from '~/generated-metadata/graphql';
 
 export const useUpdateWorkflowRunStep = () => {
@@ -49,18 +49,18 @@ export const useUpdateWorkflowRunStep = () => {
 
     if (
       !isDefined(cachedRecord) ||
-      !isDefined(cachedRecord?.output?.flow?.steps)
+      !isDefined(cachedRecord?.state?.flow?.steps)
     ) {
       return;
     }
 
     const newCachedRecord = {
       ...cachedRecord,
-      output: {
-        ...cachedRecord.output,
+      state: {
+        ...cachedRecord.state,
         flow: {
-          ...cachedRecord.output.flow,
-          steps: cachedRecord.output.flow.steps.map((step: WorkflowAction) => {
+          ...cachedRecord.state.flow,
+          steps: cachedRecord.state.flow.steps.map((step: WorkflowAction) => {
             if (step.id === updatedStep.id) {
               return updatedStep;
             }
@@ -71,7 +71,7 @@ export const useUpdateWorkflowRunStep = () => {
     };
 
     const recordGqlFields = {
-      output: true,
+      state: true,
     };
     updateRecordFromCache({
       objectMetadataItems,

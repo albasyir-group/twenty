@@ -1,13 +1,14 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { objectMetadataItemsState } from '@/object-metadata/states/objectMetadataItemsState';
 import { CoreObjectNameSingular } from '@/object-metadata/types/CoreObjectNameSingular';
-import { ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
+import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { BASE_RECORD_LAYOUT } from '@/object-record/record-show/constants/BaseRecordLayout';
 import { CardType } from '@/object-record/record-show/types/CardType';
-import { RecordLayout } from '@/object-record/record-show/types/RecordLayout';
-import { RecordLayoutTab } from '@/ui/layout/tab-list/types/RecordLayoutTab';
-import { SingleTabProps } from '@/ui/layout/tab-list/types/SingleTabProps';
+import { type RecordLayout } from '@/object-record/record-show/types/RecordLayout';
+import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
+import { type RecordLayoutTab } from '@/ui/layout/tab-list/types/RecordLayoutTab';
+import { type SingleTabProps } from '@/ui/layout/tab-list/types/SingleTabProps';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
@@ -15,6 +16,7 @@ import { isDefined } from 'twenty-shared/utils';
 import {
   IconCalendarEvent,
   IconHome,
+  IconLayoutDashboard,
   IconMail,
   IconNotes,
   IconSettings,
@@ -142,6 +144,38 @@ export const useRecordShowContainerTabs = (
           },
         },
       },
+      [CoreObjectNameSingular.Opportunity]: {
+        tabs: {
+          emails: {
+            title: 'Emails',
+            position: 600,
+            Icon: IconMail,
+            cards: [{ type: CardType.EmailCard }],
+            hide: {
+              ifMobile: false,
+              ifDesktop: false,
+              ifInRightDrawer: false,
+              ifFeaturesDisabled: [],
+              ifRequiredObjectsInactive: [],
+              ifRelationsMissing: [],
+            },
+          },
+          calendar: {
+            title: 'Calendar',
+            position: 700,
+            Icon: IconCalendarEvent,
+            cards: [{ type: CardType.CalendarCard }],
+            hide: {
+              ifMobile: false,
+              ifDesktop: false,
+              ifInRightDrawer: false,
+              ifFeaturesDisabled: [],
+              ifRequiredObjectsInactive: [],
+              ifRelationsMissing: [],
+            },
+          },
+        },
+      },
       [CoreObjectNameSingular.Workflow]: {
         hideSummaryAndFields: true,
         tabs: {
@@ -210,6 +244,30 @@ export const useRecordShowContainerTabs = (
           files: null,
         },
       },
+      [CoreObjectNameSingular.Dashboard]: {
+        hideSummaryAndFields: true,
+        hideFieldsInSidePanel: true,
+        tabs: {
+          dashboard: {
+            title: 'Dashboard',
+            position: 101,
+            Icon: IconLayoutDashboard,
+            cards: [{ type: CardType.DashboardCard }],
+            hide: {
+              ifMobile: false,
+              ifDesktop: false,
+              ifInRightDrawer: false,
+              ifFeaturesDisabled: [],
+              ifRequiredObjectsInactive: [],
+              ifRelationsMissing: [],
+            },
+          },
+          timeline: null,
+          tasks: null,
+          notes: null,
+          files: null,
+        },
+      },
     }),
     [],
   );
@@ -244,7 +302,9 @@ export const useRecordShowContainerTabs = (
             title,
             Icon,
             cards,
-            hide: !(isMobile || isInRightDrawer),
+            hide:
+              !(isMobile || isInRightDrawer) ||
+              recordLayout.hideFieldsInSidePanel,
           };
         }
 
@@ -268,8 +328,10 @@ export const useRecordShowContainerTabs = (
         const permissionHide =
           hide.ifNoReadPermission &&
           isDefined(targetObjectNameSingular) &&
-          !objectPermissionsByObjectMetadataId[targetObjectMetadataId]
-            ?.canReadObjectRecords;
+          !getObjectPermissionsFromMapByObjectMetadataId({
+            objectPermissionsByObjectMetadataId,
+            objectMetadataId: targetObjectMetadataId ?? '',
+          })?.canReadObjectRecords;
 
         const requiredObjectsInactive =
           hide.ifRequiredObjectsInactive.length > 0 &&
@@ -314,7 +376,10 @@ export const useRecordShowContainerTabs = (
                 id: 'home',
                 title: 'Home',
                 Icon: IconHome,
-                cards: [...tab.cards, ...array[1].cards],
+                cards: [
+                  ...(tab.hide ? [] : tab.cards),
+                  ...(array[1].hide ? [] : array[1].cards),
+                ],
                 hide: false,
               },
             ];

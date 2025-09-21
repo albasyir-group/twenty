@@ -1,15 +1,14 @@
-import { GraphQLFieldResolver } from 'graphql';
+import { type GraphQLFieldResolver } from 'graphql';
 
 import {
-  ObjectRecord,
-  ObjectRecordFilter,
-  ObjectRecordOrderBy,
+  type ObjectRecord,
+  type ObjectRecordFilter,
+  type ObjectRecordGroupBy,
+  type ObjectRecordOrderBy,
 } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 
-import { workspaceResolverBuilderMethodNames } from 'src/engine/api/graphql/workspace-resolver-builder/factories/factories';
+import { type workspaceResolverBuilderMethodNames } from 'src/engine/api/graphql/workspace-resolver-builder/factories/factories';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Resolver<Args = any> = GraphQLFieldResolver<any, any, Args>;
 
@@ -26,6 +25,7 @@ export enum ResolverArgsType {
   RestoreMany = 'RestoreMany',
   DestroyMany = 'DestroyMany',
   DestroyOne = 'DestroyOne',
+  MergeMany = 'MergeMany',
 }
 
 export interface FindManyResolverArgs<
@@ -65,6 +65,13 @@ export interface CreateManyResolverArgs<
   upsert?: boolean;
 }
 
+export interface GroupByResolverArgs<Filter = ObjectRecordFilter> {
+  filter?: Filter;
+  groupBy: ObjectRecordGroupBy;
+  viewId?: string;
+  orderBy?: ObjectRecordOrderBy;
+}
+
 export interface UpdateOneResolverArgs<
   Data extends Partial<ObjectRecord> = Partial<ObjectRecord>,
 > {
@@ -99,6 +106,12 @@ export interface RestoreManyResolverArgs<Filter = any> {
   filter: Filter;
 }
 
+export interface MergeManyResolverArgs {
+  ids: string[];
+  conflictPriorityIndex: number;
+  dryRun?: boolean;
+}
+
 export interface DestroyOneResolverArgs {
   id: string;
 }
@@ -126,12 +139,14 @@ export interface WorkspaceResolverBuilderMethods {
 export type ResolverArgs =
   | CreateManyResolverArgs
   | CreateOneResolverArgs
+  | GroupByResolverArgs
   | DeleteManyResolverArgs
   | DeleteOneResolverArgs
   | DestroyManyResolverArgs
   | FindDuplicatesResolverArgs
   | FindManyResolverArgs
   | FindOneResolverArgs
+  | MergeManyResolverArgs
   | RestoreManyResolverArgs
   | RestoreOneResolverArgs
   | UpdateManyResolverArgs

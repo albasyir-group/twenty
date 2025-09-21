@@ -1,7 +1,10 @@
+import { RECORD_TABLE_COLUMN_CHECKBOX_WIDTH } from '@/object-record/record-table/constants/RecordTableColumnCheckboxWidth';
+import { RECORD_TABLE_COLUMN_DRAG_AND_DROP_WIDTH } from '@/object-record/record-table/constants/RecordTableColumnDragAndDropWidth';
 import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { IconReload, IconX } from 'twenty-ui/display';
 import { Checkbox } from 'twenty-ui/input';
+import { AnimatedRotate } from 'twenty-ui/utilities';
 
 export type OverridableCheckboxType = 'default' | 'override' | 'no_cta';
 
@@ -9,7 +12,8 @@ const StyledOverridableCheckboxContainer = styled.div`
   align-items: center;
   display: inline-flex;
   justify-content: flex-start;
-  width: 48px;
+  width: ${RECORD_TABLE_COLUMN_DRAG_AND_DROP_WIDTH +
+  RECORD_TABLE_COLUMN_CHECKBOX_WIDTH}px;
 `;
 
 const StyledOverridableCheckboxContainerItem = styled.div`
@@ -59,10 +63,14 @@ export const OverridableCheckbox = ({
               onClick={disabled ? undefined : onChange}
               isDisabled={disabled}
             >
-              <IconX
-                size={theme.icon.size.md}
-                color={theme.font.color.secondary}
-              />
+              {!disabled && (
+                <AnimatedRotate>
+                  <IconX
+                    size={theme.icon.size.md}
+                    color={theme.font.color.secondary}
+                  />
+                </AnimatedRotate>
+              )}
             </StyledIconWrapper>
           </StyledOverridableCheckboxContainerItem>
         </>
@@ -77,17 +85,25 @@ export const OverridableCheckbox = ({
               onClick={disabled ? undefined : onChange}
               isDisabled={disabled}
             >
-              <IconReload
-                size={theme.icon.size.md}
-                color={theme.adaptiveColors.orange4}
-              />
+              <AnimatedRotate animateOnHover={!disabled}>
+                <IconReload
+                  size={theme.icon.size.md}
+                  color={theme.adaptiveColors.orange4}
+                />
+              </AnimatedRotate>
             </StyledIconWrapper>
           </StyledOverridableCheckboxContainerItem>
         </>
       )}
       {type === 'no_cta' && (
         <StyledOverridableCheckboxContainerItem>
-          <Checkbox checked={checked} disabled={disabled} onChange={onChange} />
+          <AnimatedRotate>
+            <Checkbox
+              checked={checked}
+              disabled={disabled}
+              onChange={onChange}
+            />
+          </AnimatedRotate>
         </StyledOverridableCheckboxContainerItem>
       )}
     </StyledOverridableCheckboxContainer>

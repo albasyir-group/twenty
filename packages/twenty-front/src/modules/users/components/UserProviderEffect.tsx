@@ -4,33 +4,29 @@ import { useIsLogged } from '@/auth/hooks/useIsLogged';
 import { availableWorkspacesState } from '@/auth/states/availableWorkspacesState';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
-import { currentWorkspaceDeletedMembersState } from '@/auth/states/currentWorkspaceDeletedMembersStates';
+import { currentWorkspaceDeletedMembersState } from '@/auth/states/currentWorkspaceDeletedMembersState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
-import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersStates';
+import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { isCurrentUserLoadedState } from '@/auth/states/isCurrentUserLoadedState';
-import { DateFormat } from '@/localization/constants/DateFormat';
-import { TimeFormat } from '@/localization/constants/TimeFormat';
-import { dateTimeFormatState } from '@/localization/states/dateTimeFormatState';
-import { detectDateFormat } from '@/localization/utils/detectDateFormat';
-import { detectTimeFormat } from '@/localization/utils/detectTimeFormat';
-import { detectTimeZone } from '@/localization/utils/detectTimeZone';
-import { getDateFormatFromWorkspaceDateFormat } from '@/localization/utils/getDateFormatFromWorkspaceDateFormat';
-import { getTimeFormatFromWorkspaceTimeFormat } from '@/localization/utils/getTimeFormatFromWorkspaceTimeFormat';
-import { AppPath } from '@/types/AppPath';
+import { useInitializeFormatPreferences } from '@/localization/hooks/useInitializeFormatPreferences';
 import { getDateFnsLocale } from '@/ui/field/display/utils/getDateFnsLocale.util';
-import { ColorScheme } from '@/workspace-member/types/WorkspaceMember';
+import { coreViewsState } from '@/views/states/coreViewState';
+import { type CoreViewWithRelations } from '@/views/types/CoreViewWithRelations';
+import { type ColorScheme } from '@/workspace-member/types/WorkspaceMember';
 import { enUS } from 'date-fns/locale';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
+import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
+import { AppPath, type ObjectPermissions } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
+  type WorkspaceMember,
   useGetCurrentUserQuery,
-  WorkspaceMember,
 } from '~/generated-metadata/graphql';
 import { dateLocaleState } from '~/localization/states/dateLocaleState';
 import { dynamicActivate } from '~/utils/i18n/dynamicActivate';
+import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
 import { isMatchingLocation } from '~/utils/isMatchingLocation';
 
 export const UserProviderEffect = () => {
@@ -43,7 +39,7 @@ export const UserProviderEffect = () => {
   const setCurrentWorkspace = useSetRecoilState(currentWorkspaceState);
   const setCurrentUserWorkspace = useSetRecoilState(currentUserWorkspaceState);
   const setAvailableWorkspaces = useSetRecoilState(availableWorkspacesState);
-  const setDateTimeFormat = useSetRecoilState(dateTimeFormatState);
+  const { initializeFormatPreferences } = useInitializeFormatPreferences();
   const isLoggedIn = useIsLogged();
 
   const updateLocaleCatalog = useRecoilCallback(
@@ -57,6 +53,20 @@ export const UserProviderEffect = () => {
               localeCatalog: localeCatalog || enUS,
             });
           });
+        }
+      },
+    [],
+  );
+
+  const setCoreViews = useRecoilCallback(
+    ({ set, snapshot }) =>
+      (coreViews: CoreViewWithRelations[]) => {
+        const existingCoreViews = snapshot
+          .getLoadable(coreViewsState)
+          .getValue();
+
+        if (!isDeeplyEqual(existingCoreViews, coreViews)) {
+          set(coreViewsState, coreViews);
         }
       },
     [],
@@ -93,11 +103,24 @@ export const UserProviderEffect = () => {
       setCurrentWorkspace({
         ...queryData.currentUser.currentWorkspace,
         defaultRole: queryData.currentUser.currentWorkspace.defaultRole ?? null,
+        defaultAgent:
+          queryData.currentUser.currentWorkspace.defaultAgent ?? null,
       });
     }
 
     if (isDefined(queryData.currentUser.currentUserWorkspace)) {
-      setCurrentUserWorkspace(queryData.currentUser.currentUserWorkspace);
+      setCurrentUserWorkspace({
+        ...queryData.currentUser.currentUserWorkspace,
+        objectsPermissions:
+          (queryData.currentUser.currentUserWorkspace
+            .objectsPermissions as Array<
+            ObjectPermissions & { objectMetadataId: string }
+          >) ?? [],
+      });
+    }
+
+    if (isDefined(queryData.currentUser?.currentWorkspace?.views)) {
+      setCoreViews(queryData.currentUser.currentWorkspace.views);
     }
 
     const {
@@ -125,19 +148,8 @@ export const UserProviderEffect = () => {
 
       updateLocaleCatalog(updatedWorkspaceMember.locale);
 
-      // TODO: factorize
-      setDateTimeFormat({
-        timeZone:
-          workspaceMember.timeZone && workspaceMember.timeZone !== 'system'
-            ? workspaceMember.timeZone
-            : detectTimeZone(),
-        dateFormat: isDefined(workspaceMember.dateFormat)
-          ? getDateFormatFromWorkspaceDateFormat(workspaceMember.dateFormat)
-          : DateFormat[detectDateFormat()],
-        timeFormat: isDefined(workspaceMember.timeFormat)
-          ? getTimeFormatFromWorkspaceTimeFormat(workspaceMember.timeFormat)
-          : TimeFormat[detectTimeFormat()],
-      });
+      // Initialize format preferences from workspace member
+      initializeFormatPreferences(updatedWorkspaceMember);
 
       dynamicActivate(
         (workspaceMember.locale as keyof typeof APP_LOCALES) ?? SOURCE_LOCALE,
@@ -145,10 +157,7 @@ export const UserProviderEffect = () => {
     }
 
     if (isDefined(workspaceMembers)) {
-      setCurrentWorkspaceMembers(
-        workspaceMembers.map(affectDefaultValuesOnEmptyWorkspaceMemberFields) ??
-          [],
-      );
+      setCurrentWorkspaceMembers(workspaceMembers);
     }
 
     if (isDefined(deletedWorkspaceMembers)) {
@@ -168,10 +177,11 @@ export const UserProviderEffect = () => {
     setCurrentWorkspace,
     setCurrentWorkspaceMember,
     setIsCurrentUserLoaded,
-    setDateTimeFormat,
+    initializeFormatPreferences,
     setCurrentWorkspaceMembersWithDeleted,
     updateLocaleCatalog,
+    setCoreViews,
   ]);
 
-  return <></>;
+  return null;
 };

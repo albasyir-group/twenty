@@ -1,14 +1,13 @@
-import { verifyEmailNextPathState } from '@/app/states/verifyEmailNextPathState';
+import { verifyEmailRedirectPathState } from '@/app/states/verifyEmailRedirectPathState';
 import { useIsLogged } from '@/auth/hooks/useIsLogged';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
 import { useDefaultHomePagePath } from '@/navigation/hooks/useDefaultHomePagePath';
 import { objectMetadataItemsState } from '@/object-metadata/states/objectMetadataItemsState';
 import { useOnboardingStatus } from '@/onboarding/hooks/useOnboardingStatus';
-import { AppPath } from '@/types/AppPath';
-import { SettingsPath } from '@/types/SettingsPath';
 import { useIsWorkspaceActivationStatusEqualsTo } from '@/workspace/hooks/useIsWorkspaceActivationStatusEqualsTo';
 import { useLocation, useParams } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
+import { AppPath, SettingsPath } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { OnboardingStatus } from '~/generated/graphql';
@@ -48,7 +47,7 @@ export const usePageChangeEffectNavigateLocation = () => {
   const objectMetadataItem = objectMetadataItems?.find(
     (objectMetadataItem) => objectMetadataItem.namePlural === objectNamePlural,
   );
-  const verifyEmailNextPath = useRecoilValue(verifyEmailNextPathState);
+  const verifyEmailRedirectPath = useRecoilValue(verifyEmailRedirectPathState);
 
   if (
     (!isLoggedIn || (isLoggedIn && !isOnAWorkspace)) &&
@@ -71,9 +70,9 @@ export const usePageChangeEffectNavigateLocation = () => {
   ) {
     if (
       isMatchingLocation(location, AppPath.VerifyEmail) &&
-      isDefined(verifyEmailNextPath)
+      isDefined(verifyEmailRedirectPath)
     ) {
-      return verifyEmailNextPath;
+      return verifyEmailRedirectPath;
     }
     return AppPath.PlanRequired;
   }
@@ -92,7 +91,6 @@ export const usePageChangeEffectNavigateLocation = () => {
     onboardingStatus === OnboardingStatus.WORKSPACE_ACTIVATION &&
     !someMatchingLocationOf([
       AppPath.CreateWorkspace,
-      AppPath.PlanRequiredSuccess,
       AppPath.BookCallDecision,
       AppPath.BookCall,
     ])

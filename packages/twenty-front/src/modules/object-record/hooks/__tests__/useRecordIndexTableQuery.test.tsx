@@ -1,18 +1,26 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
+import { RecordComponentInstanceContextsWrapper } from '@/object-record/components/RecordComponentInstanceContextsWrapper';
 import { RecordGroupContext } from '@/object-record/record-group/states/context/RecordGroupContext';
 import { useRecordIndexTableQuery } from '@/object-record/record-index/hooks/useRecordIndexTableQuery';
 import { RecordTableComponentInstance } from '@/object-record/record-table/components/RecordTableComponentInstance';
+
+import { RecordTableContextProvider } from '@/object-record/record-table/components/RecordTableContextProvider';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
-import { MockedResponse } from '@apollo/client/testing';
+import { type MockedResponse } from '@apollo/client/testing';
 import gql from 'graphql-tag';
+import { QUERY_DEFAULT_LIMIT_RECORDS } from 'twenty-shared/constants';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
-import { peopleQueryResult } from '~/testing/mock-data/people';
+import { JestRecordIndexContextProviderWrapper } from '~/testing/jest/JestRecordIndexContextProviderWrapper';
+import {
+  getMockPersonObjectMetadataItem,
+  peopleQueryResult,
+} from '~/testing/mock-data/people';
 
 const recordTableId = 'people';
 const objectNameSingular = 'person';
-const onColumnsChange = jest.fn();
+const mockPersonObjectMetadataItem = getMockPersonObjectMetadataItem();
 
 const ObjectNamePluralSetter = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
@@ -128,7 +136,6 @@ const mocks: MockedResponse[] = [
                       id
                       note {
                         __typename
-                        body
                         bodyV2 {
                           blocknote
                           markdown
@@ -571,7 +578,6 @@ const mocks: MockedResponse[] = [
                       task {
                         __typename
                         assigneeId
-                        body
                         bodyV2 {
                           blocknote
                           markdown
@@ -625,6 +631,7 @@ const mocks: MockedResponse[] = [
       variables: {
         filter: {},
         orderBy: [{ position: 'AscNullsFirst' }],
+        limit: QUERY_DEFAULT_LIMIT_RECORDS,
       },
     },
     result: jest.fn(() => ({
@@ -660,20 +667,33 @@ jest.mock('react-router-dom', () => ({
 const Wrapper = ({ children }: { children: ReactNode }) => {
   return (
     <HookMockWrapper>
-      <ObjectNamePluralSetter>
-        <ViewComponentInstanceContext.Provider
-          value={{ instanceId: 'instanceId' }}
+      <ViewComponentInstanceContext.Provider
+        value={{ instanceId: 'instanceId' }}
+      >
+        <RecordComponentInstanceContextsWrapper
+          componentInstanceId={recordTableId}
         >
-          <RecordTableComponentInstance
-            recordTableId={recordTableId}
-            onColumnsChange={onColumnsChange}
+          <JestRecordIndexContextProviderWrapper
+            objectMetadataItem={mockPersonObjectMetadataItem}
           >
-            <RecordGroupContext.Provider value={{ recordGroupId: 'default' }}>
-              {children}
-            </RecordGroupContext.Provider>
-          </RecordTableComponentInstance>
-        </ViewComponentInstanceContext.Provider>
-      </ObjectNamePluralSetter>
+            <RecordTableContextProvider
+              objectNameSingular={objectNameSingular}
+              recordTableId={recordTableId}
+              viewBarId="instanceId"
+            >
+              <ObjectNamePluralSetter>
+                <RecordTableComponentInstance recordTableId={recordTableId}>
+                  <RecordGroupContext.Provider
+                    value={{ recordGroupId: 'default' }}
+                  >
+                    {children}
+                  </RecordGroupContext.Provider>
+                </RecordTableComponentInstance>
+              </ObjectNamePluralSetter>
+            </RecordTableContextProvider>
+          </JestRecordIndexContextProviderWrapper>
+        </RecordComponentInstanceContextsWrapper>
+      </ViewComponentInstanceContext.Provider>
     </HookMockWrapper>
   );
 };

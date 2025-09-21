@@ -1,13 +1,12 @@
 import {
-  AutoResolverOpts,
+  type AutoResolverOpts,
   PagingStrategies,
-  ReadResolverOpts,
+  type ReadResolverOpts,
 } from '@ptc-org/nestjs-query-graphql';
 
 import { UpdateWorkspaceInput } from 'src/engine/core-modules/workspace/dtos/update-workspace-input';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-
-import { Workspace } from './workspace.entity';
+import { Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
 
 export const workspaceAutoResolverOpts: AutoResolverOpts<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

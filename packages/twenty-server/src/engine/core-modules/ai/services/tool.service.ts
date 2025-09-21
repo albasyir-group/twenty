@@ -1,38 +1,31 @@
 import { Injectable } from '@nestjs/common';
 
-import {
-  In,
-  IsNull,
-  LessThan,
-  LessThanOrEqual,
-  Like,
-  ILike,
-  MoreThan,
-  MoreThanOrEqual,
-  Not,
-} from 'typeorm';
-import { ToolSet } from 'ai';
-import { z } from 'zod';
+import { type ToolSet } from 'ai';
 
-import { TwentyORMGlobalManager } from 'src/engine/twenty-orm/twenty-orm-global.manager';
-import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
-import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
-import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
-import { WorkspacePermissionsCacheService } from 'src/engine/metadata-modules/workspace-permissions-cache/workspace-permissions-cache.service';
+import { buildWhereConditions } from 'src/engine/core-modules/ai/utils/find-records-filters.utils';
+import { RecordInputTransformerService } from 'src/engine/core-modules/record-transformer/services/record-input-transformer.service';
 import {
   generateBulkDeleteToolSchema,
+  generateFindOneToolSchema,
   generateFindToolSchema,
+  generateSoftDeleteToolSchema,
   getRecordInputSchema,
 } from 'src/engine/metadata-modules/agent/utils/agent-tool-schema.utils';
-import { isWorkflowRelatedObject } from 'src/engine/metadata-modules/agent/utils/is-workflow-related-object.util';
+import { isWorkflowRunObject } from 'src/engine/metadata-modules/agent/utils/is-workflow-run-object.util';
+import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { getObjectMetadataMapItemByNameSingular } from 'src/engine/metadata-modules/utils/get-object-metadata-map-item-by-name-singular.util';
+import { WorkspacePermissionsCacheService } from 'src/engine/metadata-modules/workspace-permissions-cache/workspace-permissions-cache.service';
+import { TwentyORMGlobalManager } from 'src/engine/twenty-orm/twenty-orm-global.manager';
+import { WorkspaceCacheStorageService } from 'src/engine/workspace-cache-storage/workspace-cache-storage.service';
 
 @Injectable()
 export class ToolService {
   constructor(
     private readonly twentyORMGlobalManager: TwentyORMGlobalManager,
-    private readonly workspaceEventEmitter: WorkspaceEventEmitter,
     private readonly objectMetadataService: ObjectMetadataService,
     protected readonly workspacePermissionsCacheService: WorkspacePermissionsCacheService,
+    private readonly recordInputTransformerService: RecordInputTransformerService,
+    private readonly workspaceCacheStorageService: WorkspaceCacheStorageService,
   ) {}
 
   async listTools(roleId: string, workspaceId: string): Promise<ToolSet> {
@@ -55,7 +48,7 @@ export class ToolService {
       });
 
     const filteredObjectMetadata = allObjectMetadata.filter(
-      (objectMetadata) => !isWorkflowRelatedObject(objectMetadata),
+      (objectMetadata) => !isWorkflowRunObject(objectMetadata),
     );
 
     filteredObjectMetadata.forEach((objectMetadata) => {
@@ -72,7 +65,7 @@ export class ToolService {
           execute: async (parameters) => {
             return this.createRecord(
               objectMetadata.nameSingular,
-              parameters,
+              parameters.input,
               workspaceId,
               roleId,
             );
@@ -85,7 +78,7 @@ export class ToolService {
           execute: async (parameters) => {
             return this.updateRecord(
               objectMetadata.nameSingular,
-              parameters,
+              parameters.input,
               workspaceId,
               roleId,
             );
@@ -100,7 +93,7 @@ export class ToolService {
           execute: async (parameters) => {
             return this.findRecords(
               objectMetadata.nameSingular,
-              parameters,
+              parameters.input,
               workspaceId,
               roleId,
             );
@@ -109,15 +102,11 @@ export class ToolService {
 
         tools[`find_one_${objectMetadata.nameSingular}`] = {
           description: `Retrieve a single ${objectMetadata.labelSingular} record by its unique ID. Use this when you know the exact record ID and need the complete record data. Returns the full record or an error if not found.`,
-          parameters: z.object({
-            id: z
-              .string()
-              .describe('The unique UUID of the record to retrieve'),
-          }),
+          parameters: generateFindOneToolSchema(),
           execute: async (parameters) => {
             return this.findOneRecord(
               objectMetadata.nameSingular,
-              parameters,
+              parameters.input,
               workspaceId,
               roleId,
             );
@@ -128,15 +117,11 @@ export class ToolService {
       if (objectPermission.canSoftDelete) {
         tools[`soft_delete_${objectMetadata.nameSingular}`] = {
           description: `Soft delete a ${objectMetadata.labelSingular} record by marking it as deleted. The record remains in the database but is hidden from normal queries. This is reversible and preserves all data. Use this for temporary removal.`,
-          parameters: z.object({
-            id: z
-              .string()
-              .describe('The unique UUID of the record to soft delete'),
-          }),
+          parameters: generateSoftDeleteToolSchema(),
           execute: async (parameters) => {
             return this.softDeleteRecord(
               objectMetadata.nameSingular,
-              parameters,
+              parameters.input,
               workspaceId,
               roleId,
             );
@@ -149,7 +134,7 @@ export class ToolService {
           execute: async (parameters) => {
             return this.softDeleteManyRecords(
               objectMetadata.nameSingular,
-              parameters,
+              parameters.input,
               workspaceId,
               roleId,
             );
@@ -177,7 +162,7 @@ export class ToolService {
 
       const { limit = 100, offset = 0, ...searchCriteria } = parameters;
 
-      const whereConditions = this.buildWhereConditions(searchCriteria);
+      const whereConditions = buildWhereConditions(searchCriteria);
 
       const records = await repository.find({
         where: whereConditions,
@@ -188,135 +173,19 @@ export class ToolService {
 
       return {
         success: true,
-        records,
-        count: records.length,
         message: `Found ${records.length} ${objectName} records`,
+        result: {
+          records,
+          count: records.length,
+        },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to find ${objectName} records`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
-  }
-
-  private buildWhereConditions(
-    searchCriteria: Record<string, unknown>,
-  ): Record<string, unknown> {
-    const whereConditions: Record<string, unknown> = {};
-
-    Object.entries(searchCriteria).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === '') {
-        return;
-      }
-
-      if (typeof value === 'object' && !Array.isArray(value)) {
-        const nestedConditions = this.buildNestedWhereConditions(
-          value as Record<string, unknown>,
-        );
-
-        if (Object.keys(nestedConditions).length > 0) {
-          whereConditions[key] = nestedConditions;
-        } else {
-          const filterCondition = this.parseFilterCondition(
-            value as Record<string, unknown>,
-          );
-
-          if (filterCondition !== null) {
-            whereConditions[key] = filterCondition;
-          }
-        }
-
-        return;
-      }
-
-      whereConditions[key] = value;
-    });
-
-    return whereConditions;
-  }
-
-  private buildNestedWhereConditions(
-    nestedValue: Record<string, unknown>,
-  ): Record<string, unknown> {
-    const nestedConditions: Record<string, unknown> = {};
-
-    Object.entries(nestedValue).forEach(([nestedKey, nestedFieldValue]) => {
-      if (
-        nestedFieldValue === undefined ||
-        nestedFieldValue === null ||
-        nestedFieldValue === ''
-      ) {
-        return;
-      }
-
-      if (
-        typeof nestedFieldValue === 'object' &&
-        !Array.isArray(nestedFieldValue)
-      ) {
-        const filterCondition = this.parseFilterCondition(
-          nestedFieldValue as Record<string, unknown>,
-        );
-
-        if (filterCondition !== null) {
-          nestedConditions[nestedKey] = filterCondition;
-        }
-      } else {
-        nestedConditions[nestedKey] = nestedFieldValue;
-      }
-    });
-
-    return nestedConditions;
-  }
-
-  private parseFilterCondition(filterValue: Record<string, unknown>): unknown {
-    if ('eq' in filterValue) {
-      return filterValue.eq;
-    }
-    if ('neq' in filterValue) {
-      return Not(filterValue.neq);
-    }
-    if ('gt' in filterValue) {
-      return MoreThan(filterValue.gt);
-    }
-    if ('gte' in filterValue) {
-      return MoreThanOrEqual(filterValue.gte);
-    }
-    if ('lt' in filterValue) {
-      return LessThan(filterValue.lt);
-    }
-    if ('lte' in filterValue) {
-      return LessThanOrEqual(filterValue.lte);
-    }
-    if ('in' in filterValue) {
-      return In(filterValue.in as string[]);
-    }
-    if ('like' in filterValue) {
-      return Like(filterValue.like as string);
-    }
-    if ('ilike' in filterValue) {
-      return ILike(filterValue.ilike as string);
-    }
-    if ('startsWith' in filterValue) {
-      return Like(`${filterValue.startsWith}%`);
-    }
-    if ('is' in filterValue) {
-      if (filterValue.is === 'NULL') {
-        return IsNull();
-      }
-      if (filterValue.is === 'NOT_NULL') {
-        return Not(IsNull());
-      }
-    }
-    if ('isEmptyArray' in filterValue) {
-      return [];
-    }
-    if ('containsIlike' in filterValue) {
-      return Like(`%${filterValue.containsIlike}%`);
-    }
-
-    return null;
   }
 
   private async findOneRecord(
@@ -338,8 +207,8 @@ export class ToolService {
       if (!id || typeof id !== 'string') {
         return {
           success: false,
-          error: 'Record ID is required',
           message: `Failed to find ${objectName}: Record ID is required`,
+          error: 'Record ID is required',
         };
       }
 
@@ -350,21 +219,21 @@ export class ToolService {
       if (!record) {
         return {
           success: false,
-          error: 'Record not found',
           message: `Failed to find ${objectName}: Record with ID ${id} not found`,
+          error: 'Record not found',
         };
       }
 
       return {
         success: true,
-        record,
         message: `Found ${objectName} record`,
+        result: record,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to find ${objectName} record`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -383,25 +252,40 @@ export class ToolService {
           { roleId },
         );
 
-      const createdRecord = await repository.save(parameters);
+      const objectMetadataMaps =
+        await this.workspaceCacheStorageService.getObjectMetadataMapsOrThrow(
+          workspaceId,
+        );
 
-      await this.emitDatabaseEvent({
-        objectName,
-        action: DatabaseEventAction.CREATED,
-        records: [createdRecord],
-        workspaceId,
-      });
+      const objectMetadataItemWithFieldsMaps =
+        getObjectMetadataMapItemByNameSingular(objectMetadataMaps, objectName);
+
+      if (!objectMetadataItemWithFieldsMaps) {
+        return {
+          success: false,
+          message: `Failed to create ${objectName}: Object metadata not found`,
+          error: 'Object metadata not found',
+        };
+      }
+
+      const transformedCreateData =
+        await this.recordInputTransformerService.process({
+          recordInput: parameters,
+          objectMetadataMapItem: objectMetadataItemWithFieldsMaps,
+        });
+
+      const createdRecord = await repository.save(transformedCreateData);
 
       return {
         success: true,
-        record: createdRecord,
         message: `Successfully created ${objectName}`,
+        result: createdRecord,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to create ${objectName}`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -425,8 +309,8 @@ export class ToolService {
       if (!id || typeof id !== 'string') {
         return {
           success: false,
-          error: 'Record ID is required for update',
           message: `Failed to update ${objectName}: Record ID is required`,
+          error: 'Record ID is required for update',
         };
       }
 
@@ -437,12 +321,34 @@ export class ToolService {
       if (!existingRecord) {
         return {
           success: false,
-          error: 'Record not found',
           message: `Failed to update ${objectName}: Record with ID ${id} not found`,
+          error: 'Record not found',
         };
       }
 
-      await repository.update(id as string, updateData);
+      const objectMetadataMaps =
+        await this.workspaceCacheStorageService.getObjectMetadataMapsOrThrow(
+          workspaceId,
+        );
+
+      const objectMetadataItemWithFieldsMaps =
+        getObjectMetadataMapItemByNameSingular(objectMetadataMaps, objectName);
+
+      if (!objectMetadataItemWithFieldsMaps) {
+        return {
+          success: false,
+          message: `Failed to update ${objectName}: Object metadata not found`,
+          error: 'Object metadata not found',
+        };
+      }
+
+      const transformedUpdateData =
+        await this.recordInputTransformerService.process({
+          recordInput: updateData,
+          objectMetadataMapItem: objectMetadataItemWithFieldsMaps,
+        });
+
+      await repository.update(id as string, transformedUpdateData);
 
       const updatedRecord = await repository.findOne({
         where: { id: id as string },
@@ -451,29 +357,21 @@ export class ToolService {
       if (!updatedRecord) {
         return {
           success: false,
-          error: 'Failed to retrieve updated record',
           message: `Failed to update ${objectName}: Could not retrieve updated record`,
+          error: 'Failed to retrieve updated record',
         };
       }
 
-      await this.emitDatabaseEvent({
-        objectName,
-        action: DatabaseEventAction.UPDATED,
-        records: [updatedRecord],
-        workspaceId,
-        beforeRecords: [existingRecord],
-      });
-
       return {
         success: true,
-        record: updatedRecord,
         message: `Successfully updated ${objectName}`,
+        result: updatedRecord,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to update ${objectName}`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -497,8 +395,8 @@ export class ToolService {
       if (!id || typeof id !== 'string') {
         return {
           success: false,
-          error: 'Record ID is required for soft delete',
           message: `Failed to soft delete ${objectName}: Record ID is required`,
+          error: 'Record ID is required for soft delete',
         };
       }
 
@@ -509,34 +407,28 @@ export class ToolService {
       if (!existingRecord) {
         return {
           success: false,
-          error: 'Record not found',
           message: `Failed to soft delete ${objectName}: Record with ID ${id} not found`,
+          error: 'Record not found',
         };
       }
 
       await repository.softDelete(id);
 
-      await this.emitDatabaseEvent({
-        objectName,
-        action: DatabaseEventAction.DELETED,
-        records: [existingRecord],
-        workspaceId,
-      });
-
       return {
         success: true,
         message: `Successfully soft deleted ${objectName}`,
+        result: { id },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to soft delete ${objectName}`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
-  private async destroyRecord(
+  private async _destroyRecord(
     objectName: string,
     parameters: Record<string, unknown>,
     workspaceId: string,
@@ -555,8 +447,8 @@ export class ToolService {
       if (!id || typeof id !== 'string') {
         return {
           success: false,
-          error: 'Record ID is required for destroy',
           message: `Failed to destroy ${objectName}: Record ID is required`,
+          error: 'Record ID is required for destroy',
         };
       }
 
@@ -567,29 +459,23 @@ export class ToolService {
       if (!existingRecord) {
         return {
           success: false,
-          error: 'Record not found',
           message: `Failed to destroy ${objectName}: Record with ID ${id} not found`,
+          error: 'Record not found',
         };
       }
 
       await repository.remove(existingRecord);
 
-      await this.emitDatabaseEvent({
-        objectName,
-        action: DatabaseEventAction.DESTROYED,
-        records: [existingRecord],
-        workspaceId,
-      });
-
       return {
         success: true,
         message: `Successfully destroyed ${objectName}`,
+        result: { id },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to destroy ${objectName}`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -613,8 +499,8 @@ export class ToolService {
       if (!filter || typeof filter !== 'object' || !('id' in filter)) {
         return {
           success: false,
-          error: 'Filter with record IDs is required for bulk soft delete',
           message: `Failed to soft delete many ${objectName}: Filter with record IDs is required`,
+          error: 'Filter with record IDs is required for bulk soft delete',
         };
       }
 
@@ -624,8 +510,8 @@ export class ToolService {
       if (!Array.isArray(recordIds) || recordIds.length === 0) {
         return {
           success: false,
-          error: 'At least one record ID is required for bulk soft delete',
           message: `Failed to soft delete many ${objectName}: At least one record ID is required`,
+          error: 'At least one record ID is required for bulk soft delete',
         };
       }
 
@@ -636,35 +522,31 @@ export class ToolService {
       if (existingRecords.length === 0) {
         return {
           success: false,
-          error: 'No records found to soft delete',
           message: `Failed to soft delete many ${objectName}: No records found with the provided IDs`,
+          error: 'No records found to soft delete',
         };
       }
 
       await repository.softDelete({ id: { in: recordIds } });
 
-      await this.emitDatabaseEvent({
-        objectName,
-        action: DatabaseEventAction.DELETED,
-        records: existingRecords,
-        workspaceId,
-      });
-
       return {
         success: true,
-        count: existingRecords.length,
         message: `Successfully soft deleted ${existingRecords.length} ${objectName} records`,
+        result: {
+          count: existingRecords.length,
+          deletedIds: recordIds,
+        },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to soft delete many ${objectName}`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
-  private async destroyManyRecords(
+  private async _destroyManyRecords(
     objectName: string,
     parameters: Record<string, unknown>,
     workspaceId: string,
@@ -683,8 +565,8 @@ export class ToolService {
       if (!filter || typeof filter !== 'object' || !('id' in filter)) {
         return {
           success: false,
-          error: 'Filter with record IDs is required for bulk destroy',
           message: `Failed to destroy many ${objectName}: Filter with record IDs is required`,
+          error: 'Filter with record IDs is required for bulk destroy',
         };
       }
 
@@ -694,8 +576,8 @@ export class ToolService {
       if (!Array.isArray(recordIds) || recordIds.length === 0) {
         return {
           success: false,
-          error: 'At least one record ID is required for bulk destroy',
           message: `Failed to destroy many ${objectName}: At least one record ID is required`,
+          error: 'At least one record ID is required for bulk destroy',
         };
       }
 
@@ -706,80 +588,27 @@ export class ToolService {
       if (existingRecords.length === 0) {
         return {
           success: false,
-          error: 'No records found to destroy',
           message: `Failed to destroy many ${objectName}: No records found with the provided IDs`,
+          error: 'No records found to destroy',
         };
       }
 
       await repository.delete({ id: { in: recordIds } });
 
-      await this.emitDatabaseEvent({
-        objectName,
-        action: DatabaseEventAction.DESTROYED,
-        records: existingRecords,
-        workspaceId,
-      });
-
       return {
         success: true,
-        count: existingRecords.length,
         message: `Successfully destroyed ${existingRecords.length} ${objectName} records`,
+        result: {
+          count: existingRecords.length,
+          destroyedIds: recordIds,
+        },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
         message: `Failed to destroy many ${objectName}`,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
-  }
-
-  private async emitDatabaseEvent({
-    objectName,
-    action,
-    records,
-    workspaceId,
-    beforeRecords,
-  }: {
-    objectName: string;
-    action: DatabaseEventAction;
-    records: Record<string, unknown>[];
-    workspaceId: string;
-    beforeRecords?: Record<string, unknown>[];
-  }) {
-    const objectMetadata =
-      await this.objectMetadataService.findOneWithinWorkspace(workspaceId, {
-        where: {
-          nameSingular: objectName,
-          isActive: true,
-        },
-        relations: ['fields'],
-      });
-
-    if (!objectMetadata) {
-      return;
-    }
-
-    this.workspaceEventEmitter.emitDatabaseBatchEvent({
-      objectMetadataNameSingular: objectName,
-      action,
-      events: records.map((record) => {
-        const beforeRecord = beforeRecords?.find((r) => r.id === record.id);
-
-        return {
-          recordId: record.id as string,
-          objectMetadata,
-          properties: {
-            before: beforeRecord || undefined,
-            after:
-              action === DatabaseEventAction.DELETED ||
-              action === DatabaseEventAction.DESTROYED
-                ? undefined
-                : (record as Record<string, unknown>),
-          },
-        };
-      }),
-      workspaceId,
-    });
   }
 }

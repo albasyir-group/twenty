@@ -1,13 +1,14 @@
 import { useObjectMetadataItemById } from '@/object-metadata/hooks/useObjectMetadataItemById';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
+import { SettingsRolePermissionsObjectLevelObjectFieldPermissionTable } from '@/settings/roles/role-permissions/object-level-permissions/field-permissions/components/SettingsRolePermissionsObjectLevelObjectFieldPermissionTable';
 import { SettingsRolePermissionsObjectLevelObjectFormObjectLevel } from '@/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel';
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
-import { SettingsPath } from '@/types/SettingsPath';
 import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
 import { t } from '@lingui/core/macro';
 import { useRecoilValue } from 'recoil';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
-import { getSettingsPath } from '~/utils/navigation/getSettingsPath';
 
 type SettingsRolePermissionsObjectLevelObjectFormProps = {
   roleId: string;
@@ -67,6 +68,10 @@ export const SettingsRolePermissionsObjectLevelObjectForm = ({
     >
       <SettingsPageContainer>
         <SettingsRolePermissionsObjectLevelObjectFormObjectLevel
+          objectMetadataItem={objectMetadataItem}
+          roleId={roleId}
+        />
+        <SettingsRolePermissionsObjectLevelObjectFieldPermissionTable
           objectMetadataItem={objectMetadataItem}
           roleId={roleId}
         />

@@ -5,10 +5,11 @@ import { Attachments } from '@/activities/files/components/Attachments';
 import { Notes } from '@/activities/notes/components/Notes';
 import { ObjectTasks } from '@/activities/tasks/components/ObjectTasks';
 import { TimelineActivities } from '@/activities/timeline-activities/components/TimelineActivities';
-import { ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
+import { type ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
+import { DashboardRenderer } from '@/dashboards/components/DashboardRenderer';
 import { FieldsCard } from '@/object-record/record-show/components/FieldsCard';
 import { CardType } from '@/object-record/record-show/types/CardType';
-import { ListenRecordUpdatesEffect } from '@/subscription/components/ListenUpdatesEffect';
+import { ListenRecordUpdatesEffect } from '@/subscription/components/ListenRecordUpdatesEffect';
 import { ShowPageActivityContainer } from '@/ui/layout/show-page/components/ShowPageActivityContainer';
 import { getWorkflowVisualizerComponentInstanceId } from '@/workflow/utils/getWorkflowVisualizerComponentInstanceId';
 import { WorkflowRunVisualizerEffect } from '@/workflow/workflow-diagram/components/WorkflowRunVisualizerEffect';
@@ -51,7 +52,13 @@ type CardComponentProps = {
   isInRightDrawer?: boolean;
 };
 
-type CardComponentType = (props: CardComponentProps) => JSX.Element | null;
+type CardComponentType = (
+  props: CardComponentProps | FieldsCardComponentProps,
+) => JSX.Element | null;
+
+type FieldsCardComponentProps = CardComponentProps & {
+  showDuplicatesSection?: boolean;
+};
 
 const LoadingSkeleton = () => {
   const theme = useTheme();
@@ -103,11 +110,16 @@ export const CardComponents: Record<CardType, CardComponentType> = {
     />
   ),
 
-  [CardType.FieldCard]: ({ targetableObject, isInRightDrawer }) => (
+  [CardType.FieldCard]: ({
+    targetableObject,
+    isInRightDrawer,
+    showDuplicatesSection,
+  }: FieldsCardComponentProps) => (
     <StyledGreyBox isInRightDrawer={isInRightDrawer}>
       <FieldsCard
         objectNameSingular={targetableObject.targetObjectNameSingular}
         objectRecordId={targetableObject.id}
+        showDuplicatesSection={showDuplicatesSection}
       />
     </StyledGreyBox>
   ),
@@ -147,7 +159,7 @@ export const CardComponents: Record<CardType, CardComponentType> = {
       >
         <WorkflowVisualizerEffect workflowId={targetableObject.id} />
         <Suspense fallback={<LoadingSkeleton />}>
-          <WorkflowVisualizer workflowId={targetableObject.id} />
+          <WorkflowVisualizer />
         </Suspense>
       </WorkflowVisualizerComponentInstanceContext.Provider>
     );
@@ -192,7 +204,7 @@ export const CardComponents: Record<CardType, CardComponentType> = {
           <ListenRecordUpdatesEffect
             objectNameSingular={targetableObject.targetObjectNameSingular}
             recordId={targetableObject.id}
-            listenedFields={['status', 'output']}
+            listenedFields={['status', 'state']}
           />
           <Suspense fallback={<LoadingSkeleton />}>
             <WorkflowRunVisualizer workflowRunId={targetableObject.id} />
@@ -200,5 +212,9 @@ export const CardComponents: Record<CardType, CardComponentType> = {
         </WorkflowRunVisualizerComponentInstanceContext.Provider>
       </WorkflowVisualizerComponentInstanceContext.Provider>
     );
+  },
+
+  [CardType.DashboardCard]: ({ targetableObject }) => {
+    return <DashboardRenderer recordId={targetableObject.id} />;
   },
 };

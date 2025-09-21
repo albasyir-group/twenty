@@ -1,8 +1,8 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import bcrypt from 'bcrypt';
-import { Repository } from 'typeorm';
+import { type Repository } from 'typeorm';
 
 import { AppToken } from 'src/engine/core-modules/app-token/app-token.entity';
 import {
@@ -13,7 +13,7 @@ import { AuthSsoService } from 'src/engine/core-modules/auth/services/auth-sso.s
 import { SignInUpService } from 'src/engine/core-modules/auth/services/sign-in-up.service';
 import { AccessTokenService } from 'src/engine/core-modules/auth/token/services/access-token.service';
 import { RefreshTokenService } from 'src/engine/core-modules/auth/token/services/refresh-token.service';
-import { ExistingUserOrNewUser } from 'src/engine/core-modules/auth/types/signInUp.type';
+import { type ExistingUserOrNewUser } from 'src/engine/core-modules/auth/types/signInUp.type';
 import { EmailService } from 'src/engine/core-modules/email/email.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
@@ -26,6 +26,7 @@ import { GuardRedirectService } from 'src/engine/core-modules/guard-redirect/ser
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { WorkspaceAgnosticTokenService } from 'src/engine/core-modules/auth/token/services/workspace-agnostic-token.service';
 import { DomainManagerService } from 'src/engine/core-modules/domain-manager/services/domain-manager.service';
+import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 
 import { AuthService } from './auth.service';
 
@@ -47,19 +48,19 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         {
-          provide: getRepositoryToken(Workspace, 'core'),
+          provide: getRepositoryToken(Workspace),
           useValue: {
             findOne: jest.fn(),
           },
         },
         {
-          provide: getRepositoryToken(User, 'core'),
+          provide: getRepositoryToken(User),
           useValue: {
             findOne: jest.fn(),
           },
         },
         {
-          provide: getRepositoryToken(AppToken, 'core'),
+          provide: getRepositoryToken(AppToken),
           useValue: {
             createQueryBuilder: jest.fn().mockReturnValue({
               leftJoin: jest.fn().mockReturnThis(),
@@ -134,6 +135,14 @@ describe('AuthService', () => {
             findWorkspaceFromWorkspaceIdOrAuthProvider: jest.fn(),
           },
         },
+        {
+          provide: I18nService,
+          useValue: {
+            getI18nInstance: jest.fn().mockReturnValue({
+              _: jest.fn().mockReturnValue('mocked-translation'),
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -146,11 +155,9 @@ describe('AuthService', () => {
     userWorkspaceService =
       module.get<UserWorkspaceService>(UserWorkspaceService);
     workspaceRepository = module.get<Repository<Workspace>>(
-      getRepositoryToken(Workspace, 'core'),
+      getRepositoryToken(Workspace),
     );
-    userRepository = module.get<Repository<User>>(
-      getRepositoryToken(User, 'core'),
-    );
+    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
   });
 
   beforeEach(() => {

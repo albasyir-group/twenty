@@ -2,7 +2,6 @@
 
 import { registerEnumType } from '@nestjs/graphql';
 
-import Stripe from 'stripe';
 import {
   Column,
   CreateDateColumn,
@@ -12,6 +11,8 @@ import {
   Relation,
   UpdateDateColumn,
 } from 'typeorm';
+
+import type Stripe from 'stripe';
 
 import { BillingPrice } from 'src/engine/core-modules/billing/entities/billing-price.entity';
 import { BillingUsageType } from 'src/engine/core-modules/billing/enums/billing-usage-type.enum';
@@ -23,7 +24,7 @@ export class BillingProduct {
   id: string;
 
   @Column({ nullable: true, type: 'timestamptz' })
-  deletedAt?: Date;
+  deletedAt?: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

@@ -1,6 +1,7 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { type ExecutionContext, Injectable } from '@nestjs/common';
 
-import { Request } from 'express';
+import { type Request } from 'express';
+import { AppPath } from 'twenty-shared/types';
 
 import {
   AuthException,
@@ -9,7 +10,7 @@ import {
 import { DomainManagerService } from 'src/engine/core-modules/domain-manager/services/domain-manager.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { CustomException } from 'src/utils/custom-exception';
+import { type CustomException } from 'src/utils/custom-exception';
 
 @Injectable()
 export class GuardRedirectService {
@@ -28,7 +29,7 @@ export class GuardRedirectService {
       customDomain: string | null;
       isCustomDomainEnabled?: boolean;
     },
-    pathname = '/verify',
+    pathname = AppPath.Verify,
   ) {
     if ('contextType' in context && context.contextType === 'graphql') {
       throw error;
@@ -46,17 +47,17 @@ export class GuardRedirectService {
   getSubdomainAndCustomDomainFromContext(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<Request>();
 
-    const subdomainAndCustomDomainFromReferer = request.headers.referer
-      ? this.domainManagerService.getSubdomainAndCustomDomainFromUrl(
+    const subdomainAndDomainFromReferer = request.headers.referer
+      ? this.domainManagerService.getSubdomainAndDomainFromUrl(
           request.headers.referer,
         )
       : null;
 
-    return subdomainAndCustomDomainFromReferer &&
-      subdomainAndCustomDomainFromReferer.subdomain
+    return subdomainAndDomainFromReferer &&
+      subdomainAndDomainFromReferer.subdomain
       ? {
-          subdomain: subdomainAndCustomDomainFromReferer.subdomain,
-          customDomain: subdomainAndCustomDomainFromReferer.customDomain,
+          subdomain: subdomainAndDomainFromReferer.subdomain,
+          customDomain: subdomainAndDomainFromReferer.domain,
         }
       : {
           subdomain: this.twentyConfigService.get('DEFAULT_SUBDOMAIN'),

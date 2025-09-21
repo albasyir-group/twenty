@@ -3,10 +3,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import Stripe from 'stripe';
 import { isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { In, Repository } from 'typeorm';
+
+import type Stripe from 'stripe';
 
 import { getDeletedStripeSubscriptionItemIdsFromStripeSubscriptionEvent } from 'src/engine/core-modules/billing-webhook/utils/get-deleted-stripe-subscription-item-ids-from-stripe-subscription-event.util';
 import { transformStripeSubscriptionEventToDatabaseCustomer } from 'src/engine/core-modules/billing-webhook/utils/transform-stripe-subscription-event-to-database-customer.util';
@@ -26,8 +27,10 @@ import { WorkspaceService } from 'src/engine/core-modules/workspace/services/wor
 import { Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
 import {
   CleanWorkspaceDeletionWarningUserVarsJob,
-  CleanWorkspaceDeletionWarningUserVarsJobData,
+  type CleanWorkspaceDeletionWarningUserVarsJobData,
 } from 'src/engine/workspace-manager/workspace-cleaner/jobs/clean-workspace-deletion-warning-user-vars.job';
+import { StripeSubscriptionScheduleService } from 'src/engine/core-modules/billing/stripe/services/stripe-subscription-schedule.service';
+import { StripeBillingAlertService } from 'src/engine/core-modules/billing/stripe/services/stripe-billing-alert.service';
 
 @Injectable()
 // eslint-disable-next-line @nx/workspace-inject-workspace-repository
@@ -39,16 +42,18 @@ export class BillingWebhookSubscriptionService {
     private readonly stripeCustomerService: StripeCustomerService,
     @InjectMessageQueue(MessageQueue.workspaceQueue)
     private readonly messageQueueService: MessageQueueService,
-    @InjectRepository(BillingSubscription, 'core')
+    @InjectRepository(BillingSubscription)
     private readonly billingSubscriptionRepository: Repository<BillingSubscription>,
-    @InjectRepository(BillingSubscriptionItem, 'core')
+    @InjectRepository(BillingSubscriptionItem)
     private readonly billingSubscriptionItemRepository: Repository<BillingSubscriptionItem>,
-    @InjectRepository(Workspace, 'core')
+    @InjectRepository(Workspace)
     private readonly workspaceRepository: Repository<Workspace>,
-    @InjectRepository(BillingCustomer, 'core')
+    @InjectRepository(BillingCustomer)
     private readonly billingCustomerRepository: Repository<BillingCustomer>,
     private readonly billingSubscriptionService: BillingSubscriptionService,
     private readonly workspaceService: WorkspaceService,
+    private readonly stripeSubscriptionScheduleService: StripeSubscriptionScheduleService,
+    private readonly stripeBillingAlertService: StripeBillingAlertService,
   ) {}
 
   async processStripeEvent(
@@ -82,7 +87,12 @@ export class BillingWebhookSubscriptionService {
     );
 
     await this.billingSubscriptionRepository.upsert(
-      transformStripeSubscriptionEventToDatabaseSubscription(workspaceId, data),
+      transformStripeSubscriptionEventToDatabaseSubscription(
+        workspaceId,
+        await this.stripeSubscriptionScheduleService.getSubscriptionWithSchedule(
+          data.object.id,
+        ),
+      ),
       {
         conflictPaths: ['stripeSubscriptionId'],
         skipUpdateIfNoValuesChanged: true,
@@ -144,6 +154,15 @@ export class BillingWebhookSubscriptionService {
     if (event.type === BillingWebhookEvent.CUSTOMER_SUBSCRIPTION_CREATED) {
       await this.billingSubscriptionService.setBillingThresholdsAndTrialPeriodWorkflowCredits(
         updatedBillingSubscription.id,
+      );
+      const gte =
+        this.billingSubscriptionService.getTrialPeriodFreeWorkflowCredits(
+          updatedBillingSubscription,
+        );
+
+      await this.stripeBillingAlertService.createUsageThresholdAlertForCustomerMeter(
+        updatedBillingSubscription.stripeCustomerId,
+        gte,
       );
     }
 

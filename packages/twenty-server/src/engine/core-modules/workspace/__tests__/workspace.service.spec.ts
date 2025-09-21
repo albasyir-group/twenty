@@ -1,18 +1,17 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type Repository } from 'typeorm';
 
 import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
 import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
 import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
-import { CustomDomainService } from 'src/engine/core-modules/domain-manager/services/custom-domain.service';
 import { DomainManagerService } from 'src/engine/core-modules/domain-manager/services/domain-manager.service';
 import { EmailService } from 'src/engine/core-modules/email/email.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
+import { type MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { OnboardingService } from 'src/engine/core-modules/onboarding/onboarding.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -26,6 +25,8 @@ import { Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { WorkspaceCacheStorageService } from 'src/engine/workspace-cache-storage/workspace-cache-storage.service';
 import { WorkspaceManagerService } from 'src/engine/workspace-manager/workspace-manager.service';
+import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
+import { PublicDomain } from 'src/engine/core-modules/public-domain/public-domain.entity';
 
 describe('WorkspaceService', () => {
   let service: WorkspaceService;
@@ -34,7 +35,7 @@ describe('WorkspaceService', () => {
   let workspaceRepository: Repository<Workspace>;
   let workspaceCacheStorageService: WorkspaceCacheStorageService;
   let messageQueueService: MessageQueueService;
-  let customDomainService: CustomDomainService;
+  let dnsManagerService: DnsManagerService;
   let billingSubscriptionService: BillingSubscriptionService;
 
   beforeEach(async () => {
@@ -42,7 +43,7 @@ describe('WorkspaceService', () => {
       providers: [
         WorkspaceService,
         {
-          provide: getRepositoryToken(Workspace, 'core'),
+          provide: getRepositoryToken(Workspace),
           useValue: {
             findOne: jest.fn(),
             softDelete: jest.fn(),
@@ -50,7 +51,13 @@ describe('WorkspaceService', () => {
           },
         },
         {
-          provide: getRepositoryToken(UserWorkspace, 'core'),
+          provide: getRepositoryToken(PublicDomain),
+          useValue: {
+            findOneBy: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(UserWorkspace),
           useValue: {
             find: jest.fn(),
             softDelete: jest.fn(),
@@ -58,7 +65,7 @@ describe('WorkspaceService', () => {
           },
         },
         {
-          provide: getRepositoryToken(User, 'core'),
+          provide: getRepositoryToken(User),
           useValue: {
             softDelete: jest.fn(),
           },
@@ -86,7 +93,7 @@ describe('WorkspaceService', () => {
           UserWorkspaceService,
           UserService,
           DomainManagerService,
-          CustomDomainService,
+          DnsManagerService,
           TwentyConfigService,
           EmailService,
           OnboardingService,
@@ -116,13 +123,11 @@ describe('WorkspaceService', () => {
 
     service = module.get<WorkspaceService>(WorkspaceService);
     userWorkspaceRepository = module.get<Repository<UserWorkspace>>(
-      getRepositoryToken(UserWorkspace, 'core'),
+      getRepositoryToken(UserWorkspace),
     );
-    userRepository = module.get<Repository<User>>(
-      getRepositoryToken(User, 'core'),
-    );
+    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
     workspaceRepository = module.get<Repository<Workspace>>(
-      getRepositoryToken(Workspace, 'core'),
+      getRepositoryToken(Workspace),
     );
     workspaceCacheStorageService = module.get<WorkspaceCacheStorageService>(
       WorkspaceCacheStorageService,
@@ -130,8 +135,8 @@ describe('WorkspaceService', () => {
     messageQueueService = module.get<MessageQueueService>(
       getQueueToken(MessageQueue.deleteCascadeQueue),
     );
-    customDomainService = module.get<CustomDomainService>(CustomDomainService);
-    customDomainService.deleteCustomHostnameByHostnameSilently = jest.fn();
+    dnsManagerService = module.get<DnsManagerService>(DnsManagerService);
+    dnsManagerService.deleteHostnameSilently = jest.fn();
     billingSubscriptionService = module.get<BillingSubscriptionService>(
       BillingSubscriptionService,
     );
@@ -243,7 +248,7 @@ describe('WorkspaceService', () => {
 
       await service.deleteWorkspace(mockWorkspace.id, true);
 
-      expect(billingSubscriptionService.deleteSubscriptions).toHaveBeenCalled;
+      expect(billingSubscriptionService.deleteSubscriptions).toHaveBeenCalled();
 
       expect(workspaceRepository.softDelete).toHaveBeenCalledWith({
         id: mockWorkspace.id,
@@ -269,9 +274,9 @@ describe('WorkspaceService', () => {
 
       await service.deleteWorkspace(mockWorkspace.id, false);
 
-      expect(
-        customDomainService.deleteCustomHostnameByHostnameSilently,
-      ).toHaveBeenCalledWith(customDomain);
+      expect(dnsManagerService.deleteHostnameSilently).toHaveBeenCalledWith(
+        customDomain,
+      );
       expect(workspaceRepository.delete).toHaveBeenCalledWith(mockWorkspace.id);
     });
 
@@ -290,9 +295,7 @@ describe('WorkspaceService', () => {
 
       await service.deleteWorkspace(mockWorkspace.id, true);
 
-      expect(
-        customDomainService.deleteCustomHostnameByHostnameSilently,
-      ).not.toHaveBeenCalled();
+      expect(dnsManagerService.deleteHostnameSilently).not.toHaveBeenCalled();
       expect(workspaceRepository.softDelete).toHaveBeenCalledWith({
         id: mockWorkspace.id,
       });

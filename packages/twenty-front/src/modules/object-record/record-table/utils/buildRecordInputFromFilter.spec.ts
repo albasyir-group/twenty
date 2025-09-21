@@ -1,8 +1,8 @@
-import { FieldMetadataItemOption } from '@/object-metadata/types/FieldMetadataItem';
-import { FilterableFieldType } from '@/object-record/record-filter/types/FilterableFieldType';
-import { RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
-import { ViewFilterOperand } from '@/views/types/ViewFilterOperand';
-import { ColorScheme } from '@/workspace-member/types/WorkspaceMember';
+import { type FieldMetadataItemOption } from '@/object-metadata/types/FieldMetadataItem';
+import { type FilterableFieldType } from '@/object-record/record-filter/types/FilterableFieldType';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
+import { type ColorScheme } from '@/workspace-member/types/WorkspaceMember';
+import { ViewFilterOperand } from 'twenty-shared/types';
 import { RelationType } from '~/generated-metadata/graphql';
 import { buildValueFromFilter } from './buildRecordInputFromFilter';
 

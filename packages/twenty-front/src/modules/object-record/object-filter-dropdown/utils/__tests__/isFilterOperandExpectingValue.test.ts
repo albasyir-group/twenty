@@ -1,4 +1,4 @@
-import { ViewFilterOperand } from '@/views/types/ViewFilterOperand';
+import { ViewFilterOperand } from 'twenty-shared/types';
 
 import { isFilterOperandExpectingValue } from '../isFilterOperandExpectingValue';
 

@@ -1,4 +1,4 @@
-import { WorkflowActionType } from '@/workflow/types/Workflow';
+import { type WorkflowActionType } from '@/workflow/types/Workflow';
 import { msg } from '@lingui/core/macro';
 import { assertUnreachable } from 'twenty-shared/utils';
 
@@ -18,11 +18,14 @@ export const getActionHeaderTypeOrThrow = (actionType: WorkflowActionType) => {
     case 'AI_AGENT':
       return msg`AI Agent`;
     case 'FILTER': {
-      throw new Error(
-        "The Filter action isn't meant to be displayed as a node.",
-      );
+      return msg`Filter`;
     }
-
+    case 'ITERATOR': {
+      return msg`Iterator`;
+    }
+    case 'EMPTY': {
+      return msg`Empty Node`;
+    }
     default:
       assertUnreachable(actionType, `Unsupported action type: ${actionType}`);
   }

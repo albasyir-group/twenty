@@ -1,9 +1,10 @@
 import { SettingsListCard } from '@/settings/components/SettingsListCard';
-import { SettingsPath } from '@/types/SettingsPath';
 import { useTheme } from '@emotion/react';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath } from 'twenty-shared/utils';
 import {
   IconAppWindow,
-  IconComponent,
+  type IconComponent,
   IconDatabase,
   IconServer2,
   IconTool,
@@ -11,9 +12,9 @@ import {
 } from 'twenty-ui/display';
 import {
   HealthIndicatorId,
-  SystemHealthService,
+  type SystemHealthService,
 } from '~/generated-metadata/graphql';
-import { getSettingsPath } from '~/utils/navigation/getSettingsPath';
+
 import { SettingsAdminHealthStatusRightContainer } from './SettingsAdminHealthStatusRightContainer';
 
 const HealthStatusIcons: { [k in HealthIndicatorId]: IconComponent } = {

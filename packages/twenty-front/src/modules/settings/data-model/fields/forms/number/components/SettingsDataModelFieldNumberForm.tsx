@@ -1,8 +1,8 @@
 import { Controller, useFormContext } from 'react-hook-form';
 import { z } from 'zod';
 
-import { FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { numberFieldDefaultValueSchema } from '@/object-record/record-field/validation-schemas/numberFieldDefaultValueSchema';
+import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
+import { numberFieldDefaultValueSchema } from '@/object-record/record-field/ui/validation-schemas/numberFieldDefaultValueSchema';
 import { Separator } from '@/settings/components/Separator';
 import { SettingsOptionCardContentCounter } from '@/settings/components/SettingsOptions/SettingsOptionCardContentCounter';
 import { SettingsOptionCardContentSelect } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSelect';
@@ -10,7 +10,7 @@ import { NUMBER_DATA_MODEL_SELECT_OPTIONS } from '@/settings/data-model/fields/f
 import { Select } from '@/ui/input/components/Select';
 import { useLingui } from '@lingui/react/macro';
 import { IconDecimal, IconEye } from 'twenty-ui/display';
-import { DEFAULT_DECIMAL_VALUE } from '~/utils/format/number';
+import { DEFAULT_DECIMAL_VALUE } from '~/utils/format/formatNumber';
 
 export const settingsDataModelFieldNumberFormSchema = z.object({
   settings: numberFieldDefaultValueSchema,
@@ -22,18 +22,19 @@ export type SettingsDataModelFieldNumberFormValues = z.infer<
 
 type SettingsDataModelFieldNumberFormProps = {
   disabled?: boolean;
-  fieldMetadataItem: Pick<
-    FieldMetadataItem,
-    'icon' | 'label' | 'type' | 'defaultValue' | 'settings'
-  >;
+  existingFieldMetadataId: string;
 };
 
 export const SettingsDataModelFieldNumberForm = ({
   disabled,
-  fieldMetadataItem,
+  existingFieldMetadataId,
 }: SettingsDataModelFieldNumberFormProps) => {
   const { t } = useLingui();
   const { control } = useFormContext<SettingsDataModelFieldNumberFormValues>();
+
+  const { fieldMetadataItem } = useFieldMetadataItemById(
+    existingFieldMetadataId,
+  );
 
   return (
     <Controller

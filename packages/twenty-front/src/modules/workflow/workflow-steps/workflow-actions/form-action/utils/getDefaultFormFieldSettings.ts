@@ -1,4 +1,4 @@
-import { WorkflowFormFieldType } from '@/workflow/workflow-steps/workflow-actions/form-action/types/WorkflowFormFieldType';
+import { type WorkflowFormFieldType } from '@/workflow/workflow-steps/workflow-actions/form-action/types/WorkflowFormFieldType';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { assertUnreachable } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
@@ -34,6 +34,17 @@ export const getDefaultFormFieldSettings = (type: WorkflowFormFieldType) => {
         placeholder: `Select a Company`,
         settings: {
           objectName: 'company',
+        },
+      };
+    case FieldMetadataType.SELECT:
+      return {
+        id: v4(),
+        name: 'select',
+        label: 'Select',
+        placeholder: 'Choose a value',
+        settings: {
+          selectType: 'EXISTING_FIELD',
+          selectedFieldId: undefined,
         },
       };
     default:

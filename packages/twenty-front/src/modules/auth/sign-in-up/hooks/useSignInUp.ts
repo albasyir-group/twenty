@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
-import { SubmitHandler, UseFormReturn } from 'react-hook-form';
+import { type SubmitHandler, type UseFormReturn } from 'react-hook-form';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 
-import { Form } from '@/auth/sign-in-up/hooks/useSignInUpForm';
+import { type Form } from '@/auth/sign-in-up/hooks/useSignInUpForm';
 import { signInUpModeState } from '@/auth/states/signInUpModeState';
 import {
   SignInUpStep,
@@ -12,10 +12,10 @@ import { SignInUpMode } from '@/auth/types/signInUpMode';
 import { useReadCaptchaToken } from '@/captcha/hooks/useReadCaptchaToken';
 import { useBuildSearchParamsFromUrlSyncedStates } from '@/domain-manager/hooks/useBuildSearchParamsFromUrlSyncedStates';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
-import { AppPath } from '@/types/AppPath';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { ApolloError } from '@apollo/client';
 import { useRecoilState } from 'recoil';
+import { AppPath } from 'twenty-shared/types';
 import { buildAppPathWithQueryParams } from '~/utils/buildAppPathWithQueryParams';
 import { isMatchingLocation } from '~/utils/isMatchingLocation';
 import { useAuth } from '../../hooks/useAuth';
@@ -130,7 +130,7 @@ export const useSignInUp = (form: UseFormReturn<Form>) => {
           );
         }
 
-        const verifyEmailNextPath = buildAppPathWithQueryParams(
+        const verifyEmailRedirectPath = buildAppPathWithQueryParams(
           AppPath.PlanRequired,
           await buildSearchParamsFromUrlSyncedStates(),
         );
@@ -141,7 +141,7 @@ export const useSignInUp = (form: UseFormReturn<Form>) => {
           workspaceInviteHash,
           workspacePersonalInviteToken,
           captchaToken: token,
-          verifyEmailNextPath,
+          verifyEmailRedirectPath,
         });
       } catch (error: any) {
         enqueueErrorSnackBar({

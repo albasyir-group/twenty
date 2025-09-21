@@ -13,6 +13,7 @@ import { WorkspaceMetadataCacheModule } from 'src/engine/metadata-modules/worksp
 import { WorkspacePermissionsCacheModule } from 'src/engine/metadata-modules/workspace-permissions-cache/workspace-permissions-cache.module';
 import { entitySchemaFactories } from 'src/engine/twenty-orm/factories';
 import { EntitySchemaFactory } from 'src/engine/twenty-orm/factories/entity-schema.factory';
+import { ScopedWorkspaceContextFactory } from 'src/engine/twenty-orm/factories/scoped-workspace-context.factory';
 import { TwentyORMGlobalManager } from 'src/engine/twenty-orm/twenty-orm-global.manager';
 import { TwentyORMManager } from 'src/engine/twenty-orm/twenty-orm.manager';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
@@ -22,10 +23,11 @@ import { PgPoolSharedModule } from './pg-shared-pool/pg-shared-pool.module';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature(
-      [ObjectMetadataEntity, RoleTargetsEntity, Workspace],
-      'core',
-    ),
+    TypeOrmModule.forFeature([
+      ObjectMetadataEntity,
+      RoleTargetsEntity,
+      Workspace,
+    ]),
     DataSourceModule,
     WorkspaceCacheStorageModule,
     WorkspaceMetadataCacheModule,
@@ -46,6 +48,7 @@ import { PgPoolSharedModule } from './pg-shared-pool/pg-shared-pool.module';
     TwentyORMManager,
     TwentyORMGlobalManager,
     PgPoolSharedModule,
+    ScopedWorkspaceContextFactory,
   ],
 })
 export class TwentyORMModule {}

@@ -3,8 +3,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import Stripe from 'stripe';
 import { Repository } from 'typeorm';
+
+import type Stripe from 'stripe';
 
 import { transformStripePriceEventToDatabasePrice } from 'src/engine/core-modules/billing-webhook/utils/transform-stripe-price-event-to-database-price.util';
 import {
@@ -16,17 +17,19 @@ import { BillingPrice } from 'src/engine/core-modules/billing/entities/billing-p
 import { BillingProduct } from 'src/engine/core-modules/billing/entities/billing-product.entity';
 import { StripeBillingMeterService } from 'src/engine/core-modules/billing/stripe/services/stripe-billing-meter.service';
 import { transformStripeMeterToDatabaseMeter } from 'src/engine/core-modules/billing/utils/transform-stripe-meter-to-database-meter.util';
+import { StripePriceService } from 'src/engine/core-modules/billing/stripe/services/stripe-price.service';
 
 @Injectable()
 export class BillingWebhookPriceService {
   protected readonly logger = new Logger(BillingWebhookPriceService.name);
   constructor(
     private readonly stripeBillingMeterService: StripeBillingMeterService,
-    @InjectRepository(BillingPrice, 'core')
+    private readonly stripePriceService: StripePriceService,
+    @InjectRepository(BillingPrice)
     private readonly billingPriceRepository: Repository<BillingPrice>,
-    @InjectRepository(BillingMeter, 'core')
+    @InjectRepository(BillingMeter)
     private readonly billingMeterRepository: Repository<BillingMeter>,
-    @InjectRepository(BillingProduct, 'core')
+    @InjectRepository(BillingProduct)
     private readonly billingProductRepository: Repository<BillingProduct>,
   ) {}
 
@@ -60,7 +63,9 @@ export class BillingWebhookPriceService {
     }
 
     await this.billingPriceRepository.upsert(
-      transformStripePriceEventToDatabasePrice(data),
+      transformStripePriceEventToDatabasePrice(
+        await this.stripePriceService.getPriceByPriceId(data.object.id),
+      ),
       {
         conflictPaths: ['stripePriceId'],
         skipUpdateIfNoValuesChanged: true,

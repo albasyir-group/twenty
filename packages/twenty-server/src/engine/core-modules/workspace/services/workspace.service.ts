@@ -4,23 +4,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import assert from 'assert';
 
 import { TypeOrmQueryService } from '@ptc-org/nestjs-query-typeorm';
-import { isDefined } from 'twenty-shared/utils';
+import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { Repository } from 'typeorm';
+import { t } from '@lingui/core/macro';
 
-import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
-import { CUSTOM_DOMAIN_ACTIVATED_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/custom-domain/custom-domain-activated';
-import { CUSTOM_DOMAIN_DEACTIVATED_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/custom-domain/custom-domain-deactivated';
 import { BillingEntitlementKey } from 'src/engine/core-modules/billing/enums/billing-entitlement-key.enum';
 import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
 import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
-import { CustomDomainService } from 'src/engine/core-modules/domain-manager/services/custom-domain.service';
-import { DomainManagerService } from 'src/engine/core-modules/domain-manager/services/domain-manager.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import {
   FileWorkspaceFolderDeletionJob,
-  FileWorkspaceFolderDeletionJobData,
+  type FileWorkspaceFolderDeletionJobData,
 } from 'src/engine/core-modules/file/jobs/file-workspace-folder-deletion.job';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -29,14 +25,14 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 import { UserWorkspace } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
 import { User } from 'src/engine/core-modules/user/user.entity';
-import { ActivateWorkspaceInput } from 'src/engine/core-modules/workspace/dtos/activate-workspace-input';
+import { type ActivateWorkspaceInput } from 'src/engine/core-modules/workspace/dtos/activate-workspace-input';
 import { Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
 import {
   WorkspaceException,
   WorkspaceExceptionCode,
+  WorkspaceNotFoundDefaultError,
 } from 'src/engine/core-modules/workspace/workspace.exception';
-import { workspaceValidator } from 'src/engine/core-modules/workspace/workspace.validate';
-import { SettingPermissionType } from 'src/engine/metadata-modules/permissions/constants/setting-permission-type.constants';
+import { PermissionFlagType } from 'src/engine/metadata-modules/permissions/constants/permission-flag-type.constants';
 import {
   PermissionsException,
   PermissionsExceptionCode,
@@ -47,6 +43,11 @@ import { WorkspaceCacheStorageService } from 'src/engine/workspace-cache-storage
 import { WorkspaceManagerService } from 'src/engine/workspace-manager/workspace-manager.service';
 import { DEFAULT_FEATURE_FLAGS } from 'src/engine/workspace-manager/workspace-sync-metadata/constants/default-feature-flags';
 import { extractVersionMajorMinorPatch } from 'src/utils/version/extract-version-major-minor-patch';
+import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
+import { CUSTOM_DOMAIN_ACTIVATED_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/custom-domain/custom-domain-activated';
+import { CUSTOM_DOMAIN_DEACTIVATED_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/custom-domain/custom-domain-deactivated';
+import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
+import { PublicDomain } from 'src/engine/core-modules/public-domain/public-domain.entity';
 
 @Injectable()
 // eslint-disable-next-line @nx/workspace-inject-workspace-repository
@@ -55,11 +56,13 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
   protected readonly logger = new Logger(WorkspaceService.name);
 
   constructor(
-    @InjectRepository(Workspace, 'core')
+    @InjectRepository(Workspace)
     private readonly workspaceRepository: Repository<Workspace>,
-    @InjectRepository(User, 'core')
+    @InjectRepository(PublicDomain)
+    private readonly publicDomainRepository: Repository<PublicDomain>,
+    @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(UserWorkspace, 'core')
+    @InjectRepository(UserWorkspace)
     private readonly userWorkspaceRepository: Repository<UserWorkspace>,
     private readonly workspaceManagerService: WorkspaceManagerService,
     private readonly featureFlagService: FeatureFlagService,
@@ -67,12 +70,11 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
     private readonly billingService: BillingService,
     private readonly userWorkspaceService: UserWorkspaceService,
     private readonly twentyConfigService: TwentyConfigService,
-    private readonly domainManagerService: DomainManagerService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly permissionsService: PermissionsService,
-    private readonly auditService: AuditService,
-    private readonly customDomainService: CustomDomainService,
+    private readonly dnsManagerService: DnsManagerService,
     private readonly workspaceCacheStorageService: WorkspaceCacheStorageService,
+    private readonly auditService: AuditService,
     @InjectMessageQueue(MessageQueue.deleteCascadeQueue)
     private readonly messageQueueService: MessageQueueService,
   ) {
@@ -123,22 +125,30 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
     }
 
     if (
-      customDomain &&
-      workspace.customDomain !== customDomain &&
-      isDefined(workspace.customDomain)
+      await this.publicDomainRepository.findOneBy({
+        domain: customDomain,
+      })
     ) {
-      await this.customDomainService.updateCustomDomain(
-        workspace.customDomain,
-        customDomain,
+      throw new WorkspaceException(
+        'Domain is already registered as public domain',
+        WorkspaceExceptionCode.DOMAIN_ALREADY_TAKEN,
+        {
+          userFriendlyMessage: t`Domain is already registered as public domain`,
+        },
       );
     }
 
-    if (
-      customDomain &&
-      workspace.customDomain !== customDomain &&
-      !isDefined(workspace.customDomain)
-    ) {
-      await this.customDomainService.registerCustomDomain(customDomain);
+    if (!isDefined(customDomain) || workspace.customDomain === customDomain) {
+      return;
+    }
+
+    if (isDefined(workspace.customDomain)) {
+      await this.dnsManagerService.updateHostname(
+        workspace.customDomain,
+        customDomain,
+      );
+    } else {
+      await this.dnsManagerService.registerHostname(customDomain);
     }
   }
 
@@ -155,7 +165,7 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
       id: payload.id,
     });
 
-    workspaceValidator.assertIsDefinedOrThrow(workspace);
+    assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
 
     await this.validateSecurityPermissions({
       payload,
@@ -179,9 +189,10 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
     let customDomainRegistered = false;
 
     if (payload.customDomain === null && isDefined(workspace.customDomain)) {
-      await this.customDomainService.deleteCustomHostnameByHostnameSilently(
+      await this.dnsManagerService.deleteHostnameSilently(
         workspace.customDomain,
       );
+      workspace.isCustomDomainEnabled = false;
     }
 
     if (
@@ -225,8 +236,8 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
     } catch (error) {
       // revert custom domain registration on error
       if (payload.customDomain && customDomainRegistered) {
-        this.customDomainService
-          .deleteCustomHostnameByHostnameSilently(payload.customDomain)
+        this.dnsManagerService
+          .deleteHostnameSilently(payload.customDomain)
           .catch((err) => {
             this.exceptionHandlerService.captureExceptions([err]);
           });
@@ -352,7 +363,7 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
     );
 
     if (workspace.customDomain) {
-      await this.customDomainService.deleteCustomHostnameByHostnameSilently(
+      await this.dnsManagerService.deleteHostnameSilently(
         workspace.customDomain,
       );
       this.logger.log(`workspace ${id} custom domain deleted`);
@@ -401,38 +412,6 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
     return !existingWorkspace;
   }
 
-  async checkCustomDomainValidRecords(workspace: Workspace) {
-    if (!workspace.customDomain) return;
-
-    const customDomainDetails =
-      await this.customDomainService.getCustomDomainDetails(
-        workspace.customDomain,
-      );
-
-    if (!customDomainDetails) return;
-
-    const isCustomDomainWorking =
-      this.domainManagerService.isCustomDomainWorking(customDomainDetails);
-
-    if (workspace.isCustomDomainEnabled !== isCustomDomainWorking) {
-      workspace.isCustomDomainEnabled = isCustomDomainWorking;
-      await this.workspaceRepository.save(workspace);
-
-      const analytics = this.auditService.createContext({
-        workspaceId: workspace.id,
-      });
-
-      analytics.insertWorkspaceEvent(
-        workspace.isCustomDomainEnabled
-          ? CUSTOM_DOMAIN_ACTIVATED_EVENT
-          : CUSTOM_DOMAIN_DEACTIVATED_EVENT,
-        {},
-      );
-    }
-
-    return customDomainDetails;
-  }
-
   private async validateSecurityPermissions({
     payload,
     userWorkspaceId,
@@ -457,15 +436,19 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
       const userHasPermission =
         await this.permissionsService.userHasWorkspaceSettingPermission({
           userWorkspaceId,
-          setting: SettingPermissionType.SECURITY,
+          setting: PermissionFlagType.SECURITY,
           workspaceId: workspaceId,
-          isExecutedByApiKey: isDefined(apiKey),
+          apiKeyId: apiKey,
         });
 
       if (!userHasPermission) {
         throw new PermissionsException(
           PermissionsExceptionMessage.PERMISSION_DENIED,
           PermissionsExceptionCode.PERMISSION_DENIED,
+          {
+            userFriendlyMessage:
+              'You do not have permission to manage security settings. Please contact your workspace administrator.',
+          },
         );
       }
     }
@@ -504,16 +487,55 @@ export class WorkspaceService extends TypeOrmQueryService<Workspace> {
         await this.permissionsService.userHasWorkspaceSettingPermission({
           userWorkspaceId,
           workspaceId,
-          setting: SettingPermissionType.WORKSPACE,
-          isExecutedByApiKey: isDefined(apiKey),
+          setting: PermissionFlagType.WORKSPACE,
+          apiKeyId: apiKey,
         });
 
       if (!userHasPermission) {
         throw new PermissionsException(
           PermissionsExceptionMessage.PERMISSION_DENIED,
           PermissionsExceptionCode.PERMISSION_DENIED,
+          {
+            userFriendlyMessage:
+              'You do not have permission to manage workspace settings. Please contact your workspace administrator.',
+          },
         );
       }
     }
+  }
+
+  async checkCustomDomainValidRecords(workspace: Workspace) {
+    if (!workspace.customDomain) return;
+
+    const customDomainWithRecords =
+      await this.dnsManagerService.getHostnameWithRecords(
+        workspace.customDomain,
+      );
+
+    if (!customDomainWithRecords) return;
+
+    await this.dnsManagerService.refreshHostname(customDomainWithRecords);
+
+    const isCustomDomainWorking =
+      await this.dnsManagerService.isHostnameWorking(workspace.customDomain);
+
+    if (workspace.isCustomDomainEnabled !== isCustomDomainWorking) {
+      workspace.isCustomDomainEnabled = isCustomDomainWorking;
+
+      await this.workspaceRepository.save(workspace);
+
+      const analytics = this.auditService.createContext({
+        workspaceId: workspace.id,
+      });
+
+      analytics.insertWorkspaceEvent(
+        workspace.isCustomDomainEnabled
+          ? CUSTOM_DOMAIN_ACTIVATED_EVENT
+          : CUSTOM_DOMAIN_DEACTIVATED_EVENT,
+        {},
+      );
+    }
+
+    return customDomainWithRecords;
   }
 }

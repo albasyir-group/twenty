@@ -1,7 +1,7 @@
 name: GraphQL and OpenAPI Breaking Changes Detection
 
 on:
-  pull_request:
+ pull_request:
     types: [opened, synchronize, edited]
     branches:
       - main
@@ -34,9 +34,7 @@ jobs:
     needs: changed-files-check
     if: needs.changed-files-check.outputs.any_changed == 'true'
     timeout-minutes: 45
-    runs-on: depot-ubuntu-24.04-8
-    env:
-      NX_REJECT_UNKNOWN_LOCAL_CACHE: 0
+    runs-on: shipfox-8vcpu-ubuntu-2404
     services:
       postgres:
         image: twentycrm/twenty-postgres-spilo
@@ -677,7 +675,7 @@ jobs:
                 }
                 
                 // Check PR title for "breaking"
-                const prTitle = `${{ github.event.pull_request.title }}`;
+                const prTitle = ${{ toJSON(github.event.pull_request.title) }};
                 const titleContainsBreaking = prTitle.toLowerCase().includes('breaking');
                 
                 if (hasBreakingChanges) {

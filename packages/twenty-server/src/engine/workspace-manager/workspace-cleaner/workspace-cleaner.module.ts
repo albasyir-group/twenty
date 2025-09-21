@@ -15,14 +15,12 @@ import { CleanOnboardingWorkspacesCronCommand } from 'src/engine/workspace-manag
 import { CleanSuspendedWorkspacesCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/clean-suspended-workspaces.command';
 import { CleanSuspendedWorkspacesCronCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/clean-suspended-workspaces.cron.command';
 import { DeleteWorkspacesCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/delete-workspaces.command';
+import { DestroyWorkspaceCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/destroy-workspace.command';
 import { CleanerWorkspaceService } from 'src/engine/workspace-manager/workspace-cleaner/services/cleaner.workspace-service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature(
-      [Workspace, UserWorkspace, BillingSubscription],
-      'core',
-    ),
+    TypeOrmModule.forFeature([Workspace, UserWorkspace, BillingSubscription]),
     WorkspaceModule,
     DataSourceModule,
     UserVarsModule,
@@ -32,12 +30,17 @@ import { CleanerWorkspaceService } from 'src/engine/workspace-manager/workspace-
   ],
   providers: [
     DeleteWorkspacesCommand,
-    CleanSuspendedWorkspacesCommand,
+    DestroyWorkspaceCommand,
     CleanSuspendedWorkspacesCronCommand,
+    CleanSuspendedWorkspacesCommand,
     CleanOnboardingWorkspacesCommand,
     CleanOnboardingWorkspacesCronCommand,
     CleanerWorkspaceService,
   ],
-  exports: [CleanerWorkspaceService],
+  exports: [
+    CleanerWorkspaceService,
+    CleanSuspendedWorkspacesCronCommand,
+    CleanOnboardingWorkspacesCronCommand,
+  ],
 })
 export class WorkspaceCleanerModule {}

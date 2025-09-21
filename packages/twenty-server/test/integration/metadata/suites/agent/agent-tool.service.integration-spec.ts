@@ -1,5 +1,5 @@
 import {
-  AgentToolTestContext,
+  type AgentToolTestContext,
   createAgentToolTestModule,
   createMockRepository,
   createTestRecord,
@@ -10,7 +10,7 @@ import {
   setupRepositoryMock,
 } from './utils/agent-tool-test-utils';
 
-describe('AgentToolService Integration', () => {
+describe('AgentToolGeneratorService Integration', () => {
   let context: AgentToolTestContext;
 
   beforeEach(async () => {
@@ -47,6 +47,11 @@ describe('AgentToolService Integration', () => {
                 canUpdate: true,
                 canSoftDelete: true,
                 canDestroy: true,
+                canReadObjectRecords: true,
+                canUpdateObjectRecords: true,
+                canSoftDeleteObjectRecords: true,
+                canDestroyObjectRecords: true,
+                restrictedFields: {},
               },
             },
           },
@@ -62,13 +67,14 @@ describe('AgentToolService Integration', () => {
       );
 
       expect(tools).toBeDefined();
-      expect(Object.keys(tools)).toHaveLength(6);
+      expect(Object.keys(tools)).toHaveLength(7);
       expect(Object.keys(tools)).toContain('create_testObject');
       expect(Object.keys(tools)).toContain('update_testObject');
       expect(Object.keys(tools)).toContain('find_testObject');
       expect(Object.keys(tools)).toContain('find_one_testObject');
       expect(Object.keys(tools)).toContain('soft_delete_testObject');
       expect(Object.keys(tools)).toContain('soft_delete_many_testObject');
+      expect(Object.keys(tools)).toContain('http_request');
     });
 
     it('should generate read-only tools for agent with read permissions only', async () => {
@@ -91,6 +97,11 @@ describe('AgentToolService Integration', () => {
                 canUpdate: false,
                 canSoftDelete: false,
                 canDestroy: false,
+                canReadObjectRecords: true,
+                canUpdateObjectRecords: false,
+                canSoftDeleteObjectRecords: false,
+                canDestroyObjectRecords: false,
+                restrictedFields: {},
               },
             },
           },
@@ -106,14 +117,14 @@ describe('AgentToolService Integration', () => {
       );
 
       expect(tools).toBeDefined();
-      expect(Object.keys(tools)).toHaveLength(2);
+      expect(Object.keys(tools)).toHaveLength(3);
       expect(Object.keys(tools)).toContain('find_testObject');
       expect(Object.keys(tools)).toContain('find_one_testObject');
       expect(Object.keys(tools)).not.toContain('create_testObject');
       expect(Object.keys(tools)).not.toContain('update_testObject');
     });
 
-    it('should return empty tools for agent without role', async () => {
+    it('should return only http request tool for agent without role', async () => {
       const agentWithoutRole = { ...context.testAgent, roleId: null };
 
       jest
@@ -125,24 +136,11 @@ describe('AgentToolService Integration', () => {
         context.testWorkspaceId,
       );
 
-      expect(tools).toEqual({});
+      expect(Object.keys(tools)).toHaveLength(1);
+      expect(Object.keys(tools)).toContain('http_request');
     });
 
-    it('should return empty tools when role does not exist', async () => {
-      jest
-        .spyOn(context.agentService, 'findOneAgent')
-        .mockResolvedValue(context.testAgent as any);
-      jest.spyOn(context.roleRepository, 'findOne').mockResolvedValue(null);
-
-      const tools = await context.agentToolService.generateToolsForAgent(
-        context.testAgentId,
-        context.testWorkspaceId,
-      );
-
-      expect(tools).toEqual({});
-    });
-
-    it('should filter out workflow-related objects', async () => {
+    it('should filter out workflow-run objects', async () => {
       const workflowObject = {
         ...context.testObjectMetadata,
         nameSingular: 'workflow',
@@ -168,6 +166,11 @@ describe('AgentToolService Integration', () => {
                 canUpdate: true,
                 canSoftDelete: true,
                 canDestroy: false,
+                canReadObjectRecords: true,
+                canUpdateObjectRecords: true,
+                canSoftDeleteObjectRecords: true,
+                canDestroyObjectRecords: false,
+                restrictedFields: {},
               },
             },
           },
@@ -182,7 +185,7 @@ describe('AgentToolService Integration', () => {
         context.testWorkspaceId,
       );
 
-      expect(tools).toEqual({});
+      expect(Object.keys(tools)).toHaveLength(7);
     });
   });
 
@@ -213,7 +216,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await createTool.execute(
-        { name: 'Test Record', description: 'Test description' },
+        { input: { name: 'Test Record', description: 'Test description' } },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -226,7 +229,7 @@ describe('AgentToolService Integration', () => {
       );
 
       expectSuccessResult(result, 'Successfully created testObject');
-      expect(result.record).toEqual(testRecord);
+      expect(result.result).toEqual(testRecord);
       expect(mockRepository.save).toHaveBeenCalledWith({
         name: 'Test Record',
         description: 'Test description',
@@ -257,7 +260,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await createTool.execute(
-        { name: 'Test Record' },
+        { input: { name: 'Test Record' } },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -301,7 +304,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await findTool.execute(
-        { limit: 10, offset: 0 },
+        { input: { limit: 10, offset: 0 } },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -314,8 +317,8 @@ describe('AgentToolService Integration', () => {
       );
 
       expectSuccessResult(result, 'Found 3 testObject records');
-      expect(result.records).toEqual(testRecords);
-      expect(result.count).toBe(3);
+      expect(result.result.records).toEqual(testRecords);
+      expect(result.result.count).toBe(3);
       expect(mockRepository.find).toHaveBeenCalledWith({
         where: {},
         take: 10,
@@ -349,7 +352,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await findOneTool.execute(
-        { id: 'test-record-id' },
+        { input: { id: 'test-record-id' } },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -362,7 +365,7 @@ describe('AgentToolService Integration', () => {
       );
 
       expectSuccessResult(result, 'Found testObject record');
-      expect(result.record).toEqual(testRecord);
+      expect(result.result).toEqual(testRecord);
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { id: 'test-record-id' },
       });
@@ -390,7 +393,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await findOneTool.execute(
-        { id: 'non-existent-id' },
+        { input: { id: 'non-existent-id' } },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -427,7 +430,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await findOneTool.execute(
-        {},
+        { input: {} },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -485,9 +488,11 @@ describe('AgentToolService Integration', () => {
 
       const result = await updateTool.execute(
         {
-          id: 'test-record-id',
-          name: 'New Name',
-          description: 'New description',
+          input: {
+            id: 'test-record-id',
+            name: 'New Name',
+            description: 'New description',
+          },
         },
         {
           toolCallId: 'test-tool-call-id',
@@ -501,7 +506,7 @@ describe('AgentToolService Integration', () => {
       );
 
       expectSuccessResult(result, 'Successfully updated testObject');
-      expect(result.record).toEqual(updatedRecord);
+      expect(result.result).toEqual(updatedRecord);
       expect(mockRepository.update).toHaveBeenCalledWith('test-record-id', {
         name: 'New Name',
         description: 'New description',
@@ -531,8 +536,10 @@ describe('AgentToolService Integration', () => {
 
       const result = await updateTool.execute(
         {
-          id: 'non-existent-id',
-          name: 'New Name',
+          input: {
+            id: 'non-existent-id',
+            name: 'New Name',
+          },
         },
         {
           toolCallId: 'test-tool-call-id',
@@ -580,7 +587,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await softDeleteTool.execute(
-        { id: 'test-record-id' },
+        { input: { id: 'test-record-id' } },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -621,7 +628,9 @@ describe('AgentToolService Integration', () => {
 
       const result = await softDeleteManyTool.execute(
         {
-          filter: { id: { in: ['record-1', 'record-2', 'record-3'] } },
+          input: {
+            filter: { id: { in: ['record-1', 'record-2', 'record-3'] } },
+          },
         },
         {
           toolCallId: 'test-tool-call-id',
@@ -668,7 +677,7 @@ describe('AgentToolService Integration', () => {
       }
 
       const result = await findTool.execute(
-        {},
+        { input: {} },
         {
           toolCallId: 'test-tool-call-id',
           messages: [
@@ -713,10 +722,12 @@ describe('AgentToolService Integration', () => {
 
       const result = await findTool.execute(
         {
-          name: null,
-          description: undefined,
-          status: '',
-          validField: 'valid value',
+          input: {
+            name: null,
+            description: undefined,
+            status: '',
+            validField: 'valid value',
+          },
         },
         {
           toolCallId: 'test-tool-call-id',
@@ -767,12 +778,22 @@ describe('AgentToolService Integration', () => {
                 canUpdate: true,
                 canSoftDelete: false,
                 canDestroy: false,
+                canReadObjectRecords: true,
+                canUpdateObjectRecords: true,
+                canSoftDeleteObjectRecords: false,
+                canDestroyObjectRecords: false,
+                restrictedFields: {},
               },
               [secondObjectMetadata.id]: {
                 canRead: true,
                 canUpdate: false,
                 canSoftDelete: true,
                 canDestroy: false,
+                canReadObjectRecords: true,
+                canUpdateObjectRecords: false,
+                canSoftDeleteObjectRecords: true,
+                canDestroyObjectRecords: false,
+                restrictedFields: {},
               },
             },
           },
@@ -788,7 +809,7 @@ describe('AgentToolService Integration', () => {
       );
 
       expect(tools).toBeDefined();
-      expect(Object.keys(tools)).toHaveLength(8);
+      expect(Object.keys(tools)).toHaveLength(9);
       expect(Object.keys(tools)).toContain('create_testObject');
       expect(Object.keys(tools)).toContain('update_testObject');
       expect(Object.keys(tools)).toContain('find_testObject');

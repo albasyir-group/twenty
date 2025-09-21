@@ -1,16 +1,16 @@
 import { getOperationName } from '@apollo/client/utilities';
-import { Meta, StoryObj } from '@storybook/react';
+import { type Meta, type StoryObj } from '@storybook/react';
 import { fireEvent, within } from '@storybook/test';
 import { HttpResponse, graphql } from 'msw';
 
 import { GET_CURRENT_USER } from '@/users/graphql/queries/getCurrentUser';
 import {
   PageDecorator,
-  PageDecoratorArgs,
+  type PageDecoratorArgs,
 } from '~/testing/decorators/PageDecorator';
 import { graphqlMocks } from '~/testing/graphqlMocks';
 
-import { AppPath } from '@/types/AppPath';
+import { AppPath } from 'twenty-shared/types';
 import { SignInUp } from '../SignInUp';
 
 const meta: Meta<PageDecoratorArgs> = {

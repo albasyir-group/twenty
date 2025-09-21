@@ -1,19 +1,21 @@
-import { FieldMetadata } from '@/object-record/record-field/types/FieldMetadata';
-import { ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
-import { ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
+import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 
+import { contextStoreAnyFieldFilterValueComponentState } from '@/context-store/states/contextStoreAnyFieldFilterValueComponentState';
+import { contextStoreFilterGroupsComponentState } from '@/context-store/states/contextStoreFilterGroupsComponentState';
 import { contextStoreFiltersComponentState } from '@/context-store/states/contextStoreFiltersComponentState';
 import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
 import { computeContextStoreFilters } from '@/context-store/utils/computeContextStoreFilters';
-import { ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
+import { useColumnDefinitionsFromFieldMetadata } from '@/object-metadata/hooks/useColumnDefinitionsFromFieldMetadata';
+import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { useLazyFetchAllRecords } from '@/object-record/hooks/useLazyFetchAllRecords';
 import { EXPORT_TABLE_DATA_DEFAULT_PAGE_SIZE } from '@/object-record/object-options-dropdown/constants/ExportTableDataDefaultPageSize';
 import { useObjectOptionsForBoard } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsForBoard';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
 import { recordGroupFieldMetadataComponentState } from '@/object-record/record-group/states/recordGroupFieldMetadataComponentState';
 import { useFindManyRecordIndexTableParams } from '@/object-record/record-index/hooks/useFindManyRecordIndexTableParams';
-import { visibleTableColumnsComponentSelector } from '@/object-record/record-table/states/selectors/visibleTableColumnsComponentSelector';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { ViewType } from '@/views/types/ViewType';
 
 export const sleep = (ms: number) =>
@@ -51,7 +53,7 @@ export const useRecordIndexLazyFetchRecords = ({
     viewBarId: recordIndexId,
   });
 
-  const recordGroupFieldMetadata = useRecoilComponentValueV2(
+  const recordGroupFieldMetadata = useRecoilComponentValue(
     recordGroupFieldMetadataComponentState,
     recordIndexId,
   );
@@ -59,17 +61,21 @@ export const useRecordIndexLazyFetchRecords = ({
   const hiddenKanbanFieldColumn = hiddenBoardFields.find(
     (column) => column.metadata.fieldName === recordGroupFieldMetadata?.name,
   );
-  const columns = useRecoilComponentValueV2(
-    visibleTableColumnsComponentSelector,
-    recordIndexId,
-  );
 
-  const contextStoreTargetedRecordsRule = useRecoilComponentValueV2(
+  const contextStoreTargetedRecordsRule = useRecoilComponentValue(
     contextStoreTargetedRecordsRuleComponentState,
   );
 
-  const contextStoreFilters = useRecoilComponentValueV2(
+  const contextStoreFilters = useRecoilComponentValue(
     contextStoreFiltersComponentState,
+  );
+
+  const contextStoreFilterGroups = useRecoilComponentValue(
+    contextStoreFilterGroupsComponentState,
+  );
+
+  const contextStoreAnyFieldFilterValue = useRecoilComponentValue(
+    contextStoreAnyFieldFilterValueComponentState,
   );
 
   const { filterValueDependencies } = useFilterValueDependencies();
@@ -78,15 +84,20 @@ export const useRecordIndexLazyFetchRecords = ({
     objectMetadataItem.nameSingular,
   );
 
-  const queryFilter = computeContextStoreFilters(
+  const queryFilter = computeContextStoreFilters({
     contextStoreTargetedRecordsRule,
     contextStoreFilters,
+    contextStoreFilterGroups,
     objectMetadataItem,
     filterValueDependencies,
-  );
+    contextStoreAnyFieldFilterValue,
+  });
+
+  const { columnDefinitions } =
+    useColumnDefinitionsFromFieldMetadata(objectMetadataItem);
 
   const finalColumns = [
-    ...columns,
+    ...columnDefinitions,
     ...(hiddenKanbanFieldColumn && viewType === ViewType.Kanban
       ? [hiddenKanbanFieldColumn]
       : []),

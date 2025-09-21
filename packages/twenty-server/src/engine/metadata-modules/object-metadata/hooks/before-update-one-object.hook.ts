@@ -3,22 +3,19 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
-import { i18n } from '@lingui/core';
 import {
-  BeforeUpdateOneHook,
-  UpdateOneInputType,
+  type BeforeUpdateOneHook,
+  type UpdateOneInputType,
 } from '@ptc-org/nestjs-query-graphql';
-import { APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
+import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
 
 import { generateMessageId } from 'src/engine/core-modules/i18n/utils/generateMessageId';
-import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
-import { ObjectStandardOverridesDTO } from 'src/engine/metadata-modules/object-metadata/dtos/object-standard-overrides.dto';
-import { UpdateObjectPayload } from 'src/engine/metadata-modules/object-metadata/dtos/update-object.input';
-import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
+import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
+import { type ObjectStandardOverridesDTO } from 'src/engine/metadata-modules/object-metadata/dtos/object-standard-overrides.dto';
+import { type UpdateObjectPayload } from 'src/engine/metadata-modules/object-metadata/dtos/update-object.input';
+import { type ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 
 interface StandardObjectUpdate extends Partial<UpdateObjectPayload> {
@@ -31,9 +28,7 @@ export class BeforeUpdateOneObject<T extends UpdateObjectPayload>
 {
   constructor(
     readonly objectMetadataService: ObjectMetadataService,
-    // TODO: Should not use the repository here
-    @InjectRepository(FieldMetadataEntity, 'core')
-    private readonly fieldMetadataRepository: Repository<FieldMetadataEntity>,
+    private readonly i18nService: I18nService,
   ) {}
 
   // TODO: this logic could be moved to a policy guard
@@ -195,7 +190,7 @@ export class BeforeUpdateOneObject<T extends UpdateObjectPayload>
     update: StandardObjectUpdate;
     overrideKey: 'labelSingular' | 'labelPlural' | 'description' | 'icon';
     newValue: string;
-    originalValue: string;
+    originalValue: string | null;
     locale?: keyof typeof APP_LOCALES | undefined;
   }): boolean {
     if (locale && locale !== SOURCE_LOCALE) {
@@ -224,10 +219,11 @@ export class BeforeUpdateOneObject<T extends UpdateObjectPayload>
     update: StandardObjectUpdate,
     overrideKey: 'labelSingular' | 'labelPlural' | 'description' | 'icon',
     newValue: string,
-    originalValue: string,
+    originalValue: string | null,
     locale: keyof typeof APP_LOCALES,
   ): boolean {
     const messageId = generateMessageId(originalValue ?? '');
+    const i18n = this.i18nService.getI18nInstance(locale);
     const translatedMessage = i18n._(messageId);
 
     if (newValue !== translatedMessage) {
@@ -254,7 +250,7 @@ export class BeforeUpdateOneObject<T extends UpdateObjectPayload>
     update: StandardObjectUpdate,
     overrideKey: 'labelSingular' | 'labelPlural' | 'description' | 'icon',
     newValue: string,
-    originalValue: string,
+    originalValue: string | null,
   ): boolean {
     if (newValue !== originalValue) {
       return false;

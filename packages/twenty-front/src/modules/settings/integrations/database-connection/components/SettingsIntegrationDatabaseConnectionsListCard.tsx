@@ -2,12 +2,12 @@ import styled from '@emotion/styled';
 
 import { SettingsListCard } from '@/settings/components/SettingsListCard';
 import { SettingsIntegrationDatabaseConnectionSyncStatus } from '@/settings/integrations/database-connection/components/SettingsIntegrationDatabaseConnectionSyncStatus';
-import { SettingsIntegration } from '@/settings/integrations/types/SettingsIntegration';
-import { SettingsPath } from '@/types/SettingsPath';
-import { RemoteServer } from '~/generated-metadata/graphql';
-import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { type SettingsIntegration } from '@/settings/integrations/types/SettingsIntegration';
+import { SettingsPath } from 'twenty-shared/types';
 import { IconChevronRight } from 'twenty-ui/display';
 import { LightIconButton } from 'twenty-ui/input';
+import { type RemoteServer } from '~/generated-metadata/graphql';
+import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
 type SettingsIntegrationDatabaseConnectionsListCardProps = {
   integration: SettingsIntegration;

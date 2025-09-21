@@ -1,7 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import { DeleteResult, Repository } from 'typeorm';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath } from 'twenty-shared/utils';
+import { type DeleteResult, type Repository } from 'typeorm';
 
 import { ApprovedAccessDomain } from 'src/engine/core-modules/approved-access-domain/approved-access-domain.entity';
 import {
@@ -11,8 +13,8 @@ import {
 import { DomainManagerService } from 'src/engine/core-modules/domain-manager/services/domain-manager.service';
 import { EmailService } from 'src/engine/core-modules/email/email.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
-import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
+import { type Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
+import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 import { ApprovedAccessDomainService } from './approved-access-domain.service';
 
@@ -28,7 +30,7 @@ describe('ApprovedAccessDomainService', () => {
       providers: [
         ApprovedAccessDomainService,
         {
-          provide: getRepositoryToken(ApprovedAccessDomain, 'core'),
+          provide: getRepositoryToken(ApprovedAccessDomain),
           useValue: {
             delete: jest.fn(),
             findOneBy: jest.fn(),
@@ -61,7 +63,7 @@ describe('ApprovedAccessDomainService', () => {
       ApprovedAccessDomainService,
     );
     approvedAccessDomainRepository = module.get(
-      getRepositoryToken(ApprovedAccessDomain, 'core'),
+      getRepositoryToken(ApprovedAccessDomain),
     );
     emailService = module.get<EmailService>(EmailService);
     twentyConfigService = module.get<TwentyConfigService>(TwentyConfigService);
@@ -247,6 +249,7 @@ describe('ApprovedAccessDomainService', () => {
       const sender = {
         userEmail: 'sender@example.com',
         name: { firstName: 'John', lastName: 'Doe' },
+        locale: 'en',
       } as WorkspaceMemberWorkspaceEntity;
       const workspace = {
         displayName: 'Test Workspace',
@@ -282,7 +285,7 @@ describe('ApprovedAccessDomainService', () => {
 
       expect(domainManagerService.buildWorkspaceURL).toHaveBeenCalledWith({
         workspace: workspace,
-        pathname: 'settings/security',
+        pathname: getSettingsPath(SettingsPath.Domains),
         searchParams: { validationToken: expect.any(String) },
       });
 

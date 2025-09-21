@@ -6,9 +6,8 @@ import { useIsLogged } from '@/auth/hooks/useIsLogged';
 import { workspacePublicDataState } from '@/auth/states/workspacePublicDataState';
 import { PASSWORD_REGEX } from '@/auth/utils/passwordRegex';
 import { useReadCaptchaToken } from '@/captcha/hooks/useReadCaptchaToken';
-import { AppPath } from '@/types/AppPath';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { TextInputV2 } from '@/ui/input/components/TextInputV2';
+import { TextInput } from '@/ui/input/components/TextInput';
 import { Modal } from '@/ui/layout/modal/components/Modal';
 import { ApolloError } from '@apollo/client';
 import { useTheme } from '@emotion/react';
@@ -22,6 +21,7 @@ import { Controller, useForm } from 'react-hook-form';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import { useParams } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
+import { AppPath } from 'twenty-shared/types';
 import { MainButton } from 'twenty-ui/input';
 import { AnimatedEaseIn } from 'twenty-ui/utilities';
 import { z } from 'zod';
@@ -204,7 +204,7 @@ export const PasswordReset = () => {
                   }}
                 >
                   <StyledInputContainer>
-                    <TextInputV2
+                    <TextInput
                       autoFocus
                       value={email}
                       placeholder={t`Email`}
@@ -230,7 +230,7 @@ export const PasswordReset = () => {
                       fieldState: { error },
                     }) => (
                       <StyledInputContainer>
-                        <TextInputV2
+                        <TextInput
                           autoFocus
                           value={value}
                           type="password"

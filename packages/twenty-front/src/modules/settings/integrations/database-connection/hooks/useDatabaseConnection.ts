@@ -1,4 +1,4 @@
-import { WatchQueryFetchPolicy } from '@apollo/client';
+import { type WatchQueryFetchPolicy } from '@apollo/client';
 import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -6,7 +6,7 @@ import { useGetDatabaseConnection } from '@/databases/hooks/useGetDatabaseConnec
 import { useGetDatabaseConnectionTables } from '@/databases/hooks/useGetDatabaseConnectionTables';
 import { useIsSettingsIntegrationEnabled } from '@/settings/integrations/hooks/useIsSettingsIntegrationEnabled';
 import { useSettingsIntegrationCategories } from '@/settings/integrations/hooks/useSettingsIntegrationCategories';
-import { AppPath } from '@/types/AppPath';
+import { AppPath } from 'twenty-shared/types';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
 
 export const useDatabaseConnection = ({

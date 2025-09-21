@@ -11,10 +11,12 @@ import { EmailAliasManagerModule } from 'src/modules/connected-account/email-ali
 import { MessagingCommonModule } from 'src/modules/messaging/common/messaging-common.module';
 import { ImapClientProvider } from 'src/modules/messaging/message-import-manager/drivers/imap/providers/imap-client.provider';
 import { ImapFetchByBatchService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-fetch-by-batch.service';
+import { ImapFindSentFolderService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-find-sent-folder.service';
 import { ImapGetMessageListService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-get-message-list.service';
 import { ImapGetMessagesService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-get-messages.service';
 import { ImapHandleErrorService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-handle-error.service';
-import { ImapMessageLocatorService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-message-locator.service';
+import { ImapIncrementalSyncService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-incremental-sync.service';
+import { ImapMessageFetcherService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-message-fetcher.service';
 import { ImapMessageProcessorService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-message-processor.service';
 import { MessageParticipantManagerModule } from 'src/modules/messaging/message-participant-manager/message-participant-manager.module';
 
@@ -23,7 +25,7 @@ import { MessageParticipantManagerModule } from 'src/modules/messaging/message-p
     HttpModule,
     ObjectMetadataRepositoryModule.forFeature([BlocklistWorkspaceEntity]),
     MessagingCommonModule,
-    TypeOrmModule.forFeature([FeatureFlag], 'core'),
+    TypeOrmModule.forFeature([FeatureFlag]),
     EmailAliasManagerModule,
     FeatureFlagModule,
     WorkspaceDataSourceModule,
@@ -35,13 +37,16 @@ import { MessageParticipantManagerModule } from 'src/modules/messaging/message-p
     ImapGetMessagesService,
     ImapGetMessageListService,
     ImapHandleErrorService,
-    ImapMessageLocatorService,
+    ImapIncrementalSyncService,
+    ImapMessageFetcherService,
     ImapMessageProcessorService,
+    ImapFindSentFolderService,
   ],
   exports: [
     ImapGetMessagesService,
     ImapGetMessageListService,
     ImapClientProvider,
+    ImapFindSentFolderService,
   ],
 })
 export class MessagingIMAPDriverModule {}

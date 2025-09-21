@@ -1,20 +1,20 @@
 import { Injectable } from '@nestjs/common';
 
-import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
+import { type DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
 import { checkStringIsDatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/utils/check-string-is-database-event-action';
 import { generateFakeValue } from 'src/engine/utils/generate-fake-value';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
-import { OutputSchema } from 'src/modules/workflow/workflow-builder/workflow-schema/types/output-schema.type';
+import { type OutputSchema } from 'src/modules/workflow/workflow-builder/workflow-schema/types/output-schema.type';
 import { generateFakeFormResponse } from 'src/modules/workflow/workflow-builder/workflow-schema/utils/generate-fake-form-response';
 import { generateFakeObjectRecord } from 'src/modules/workflow/workflow-builder/workflow-schema/utils/generate-fake-object-record';
 import { generateFakeObjectRecordEvent } from 'src/modules/workflow/workflow-builder/workflow-schema/utils/generate-fake-object-record-event';
-import { FormFieldMetadata } from 'src/modules/workflow/workflow-executor/workflow-actions/form/types/workflow-form-action-settings.type';
+import { type FormFieldMetadata } from 'src/modules/workflow/workflow-executor/workflow-actions/form/types/workflow-form-action-settings.type';
 import {
-  WorkflowAction,
+  type WorkflowAction,
   WorkflowActionType,
 } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
 import {
-  WorkflowTrigger,
+  type WorkflowTrigger,
   WorkflowTriggerType,
 } from 'src/modules/workflow/workflow-trigger/types/workflow-trigger.type';
 
@@ -73,13 +73,69 @@ export class WorkflowSchemaWorkspaceService {
         });
       case WorkflowActionType.FORM:
         return this.computeFormActionOutputSchema({
-          formMetadata: step.settings.input,
+          formFieldMetadataItems: step.settings.input,
           workspaceId,
         });
+      case WorkflowActionType.ITERATOR: {
+        return {
+          currentItem: {
+            label: 'Current Item',
+            isLeaf: true,
+            type: 'unknown',
+            value: generateFakeValue('unknown'),
+          },
+          currentItemIndex: {
+            label: 'Current Item Index',
+            isLeaf: true,
+            type: 'number',
+            value: generateFakeValue('number'),
+          },
+          hasProcessedAllItems: {
+            label: 'Has Processed All Items',
+            isLeaf: true,
+            type: 'boolean',
+            value: false,
+          },
+        };
+      }
       case WorkflowActionType.CODE: // StepOutput schema is computed on serverlessFunction draft execution
       default:
         return {};
     }
+  }
+
+  async enrichOutputSchema({
+    step,
+    workspaceId,
+  }: {
+    step: WorkflowAction;
+    workspaceId: string;
+  }): Promise<WorkflowAction> {
+    // We don't enrich on the fly for code and HTTP request workflow actions.
+    // For code actions, OutputSchema is computed and updated when testing the serverless function.
+    // For HTTP requests and AI agent, OutputSchema is determined by the example response input
+    if (
+      [
+        WorkflowActionType.CODE,
+        WorkflowActionType.HTTP_REQUEST,
+        WorkflowActionType.AI_AGENT,
+      ].includes(step.type)
+    ) {
+      return step;
+    }
+
+    const result = { ...step };
+    const outputSchema = await this.computeStepOutputSchema({
+      step,
+      workspaceId,
+    });
+
+    result.settings = {
+      ...result.settings,
+      outputSchema: outputSchema || {},
+    };
+
+    return result;
   }
 
   private async computeDatabaseEventTriggerOutputSchema({
@@ -117,6 +173,7 @@ export class WorkflowSchemaWorkspaceService {
     const recordOutputSchema = await this.computeRecordOutputSchema({
       objectType,
       workspaceId,
+      maxDepth: 0,
     });
 
     return {
@@ -138,9 +195,11 @@ export class WorkflowSchemaWorkspaceService {
   private async computeRecordOutputSchema({
     objectType,
     workspaceId,
+    maxDepth = 1,
   }: {
     objectType: string;
     workspaceId: string;
+    maxDepth?: number;
   }): Promise<OutputSchema> {
     const objectMetadataInfo =
       await this.workflowCommonWorkspaceService.getObjectMetadataItemWithFieldsMaps(
@@ -148,7 +207,7 @@ export class WorkflowSchemaWorkspaceService {
         workspaceId,
       );
 
-    return generateFakeObjectRecord({ objectMetadataInfo });
+    return generateFakeObjectRecord({ objectMetadataInfo, maxDepth });
   }
 
   private computeSendEmailActionOutputSchema(): OutputSchema {
@@ -156,10 +215,10 @@ export class WorkflowSchemaWorkspaceService {
   }
 
   private async computeFormActionOutputSchema({
-    formMetadata,
+    formFieldMetadataItems,
     workspaceId,
   }: {
-    formMetadata: FormFieldMetadata[];
+    formFieldMetadataItems: FormFieldMetadata[];
     workspaceId: string;
   }): Promise<OutputSchema> {
     const objectMetadataMaps =
@@ -168,7 +227,7 @@ export class WorkflowSchemaWorkspaceService {
       );
 
     return generateFakeFormResponse({
-      formMetadata,
+      formFieldMetadataItems,
       objectMetadataMaps,
     });
   }

@@ -3,11 +3,12 @@
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { Command } from 'nest-commander';
-import Stripe from 'stripe';
 import { Repository } from 'typeorm';
 
+import type Stripe from 'stripe';
+
 import {
-  MigrationCommandOptions,
+  type MigrationCommandOptions,
   MigrationCommandRunner,
 } from 'src/database/commands/command-runners/migration.command-runner';
 import { BillingMeter } from 'src/engine/core-modules/billing/entities/billing-meter.entity';
@@ -28,11 +29,11 @@ import { transformStripeProductToDatabaseProduct } from 'src/engine/core-modules
 export class BillingSyncPlansDataCommand extends MigrationCommandRunner {
   private readonly batchSize = 5;
   constructor(
-    @InjectRepository(BillingPrice, 'core')
+    @InjectRepository(BillingPrice)
     private readonly billingPriceRepository: Repository<BillingPrice>,
-    @InjectRepository(BillingProduct, 'core')
+    @InjectRepository(BillingProduct)
     private readonly billingProductRepository: Repository<BillingProduct>,
-    @InjectRepository(BillingMeter, 'core')
+    @InjectRepository(BillingMeter)
     private readonly billingMeterRepository: Repository<BillingMeter>,
     private readonly stripeBillingMeterService: StripeBillingMeterService,
     private readonly stripeProductService: StripeProductService,
@@ -136,7 +137,7 @@ export class BillingSyncPlansDataCommand extends MigrationCommandRunner {
   }
 
   override async runMigrationCommand(
-    passedParams: string[],
+    _passedParams: string[],
     options: MigrationCommandOptions,
   ): Promise<void> {
     const billingMeters = await this.stripeBillingMeterService.getAllMeters();

@@ -7,12 +7,13 @@ import { SelectableListComponentInstanceContext } from '@/ui/layout/selectable-l
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useListenClickOutside } from '@/ui/utilities/pointer-event/hooks/useListenClickOutside';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { TagColor } from 'twenty-ui/components';
-import { SelectOption } from 'twenty-ui/input';
+import { type TagColor } from 'twenty-ui/components';
+import { type SelectOption } from 'twenty-ui/input';
 import { MenuItemSelectTag } from 'twenty-ui/navigation';
+import { normalizeSearchText } from '~/utils/normalizeSearchText';
 
 interface SelectInputProps {
   onOptionSelected: (selectedOption: SelectOption) => void;
@@ -41,7 +42,7 @@ export const SelectInput = ({
     SelectableListComponentInstanceContext,
   );
 
-  const selectedItemId = useRecoilComponentValueV2(
+  const selectedItemId = useRecoilComponentValue(
     selectedItemIdComponentState,
     selectableListInstanceId,
   );
@@ -51,16 +52,17 @@ export const SelectInput = ({
     SelectOption | undefined
   >(defaultOption);
 
-  const optionsToSelect = useMemo(
-    () =>
+  const optionsToSelect = useMemo(() => {
+    const searchTerm = normalizeSearchText(searchFilter);
+    return (
       options.filter((option) => {
         return (
           option.value !== selectedOption?.value &&
-          option.label.toLowerCase().includes(searchFilter.toLowerCase())
+          normalizeSearchText(option.label).includes(searchTerm)
         );
-      }) || [],
-    [options, searchFilter, selectedOption?.value],
-  );
+      }) || []
+    );
+  }, [options, searchFilter, selectedOption?.value]);
 
   const optionsInDropDown = useMemo(
     () =>
@@ -86,7 +88,7 @@ export const SelectInput = ({
     refs: [containerRef],
     callback: (event) => {
       event.stopImmediatePropagation();
-
+      event.preventDefault();
       const weAreNotInAnHTMLInput = !(
         event.target instanceof HTMLInputElement &&
         event.target.tagName === 'INPUT'
@@ -116,7 +118,7 @@ export const SelectInput = ({
               key={`No ${clearLabel}`}
               text={`No ${clearLabel}`}
               color="transparent"
-              variant={'outline'}
+              variant="outline"
               onClick={handleClearOption}
               isKeySelected={selectedItemId === `No ${clearLabel}`}
             />

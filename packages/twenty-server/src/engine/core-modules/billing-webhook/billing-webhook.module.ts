@@ -9,6 +9,7 @@ import { BillingWebhookInvoiceService } from 'src/engine/core-modules/billing-we
 import { BillingWebhookPriceService } from 'src/engine/core-modules/billing-webhook/services/billing-webhook-price.service';
 import { BillingWebhookProductService } from 'src/engine/core-modules/billing-webhook/services/billing-webhook-product.service';
 import { BillingWebhookSubscriptionService } from 'src/engine/core-modules/billing-webhook/services/billing-webhook-subscription.service';
+import { BillingWebhookSubscriptionScheduleService } from 'src/engine/core-modules/billing-webhook/services/billing-webhook-subscription-schedule.service';
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { BillingCustomer } from 'src/engine/core-modules/billing/entities/billing-customer.entity';
 import { BillingEntitlement } from 'src/engine/core-modules/billing/entities/billing-entitlement.entity';
@@ -36,21 +37,18 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
     PermissionsModule,
     WorkspaceModule,
     BillingModule,
-    TypeOrmModule.forFeature(
-      [
-        BillingSubscription,
-        BillingSubscriptionItem,
-        BillingCustomer,
-        BillingProduct,
-        BillingPrice,
-        BillingMeter,
-        BillingEntitlement,
-        Workspace,
-        UserWorkspace,
-        FeatureFlag,
-      ],
-      'core',
-    ),
+    TypeOrmModule.forFeature([
+      BillingSubscription,
+      BillingSubscriptionItem,
+      BillingCustomer,
+      BillingProduct,
+      BillingPrice,
+      BillingMeter,
+      BillingEntitlement,
+      Workspace,
+      UserWorkspace,
+      FeatureFlag,
+    ]),
   ],
   controllers: [BillingWebhookController],
   providers: [
@@ -60,6 +58,7 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
     BillingWebhookInvoiceService,
     BillingWebhookCustomerService,
     BillingWebhookSubscriptionService,
+    BillingWebhookSubscriptionScheduleService,
     BillingWebhookEntitlementService,
   ],
 })

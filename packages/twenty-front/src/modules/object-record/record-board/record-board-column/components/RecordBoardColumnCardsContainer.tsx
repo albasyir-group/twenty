@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { Draggable, DroppableProvided } from '@hello-pangea/dnd';
+import { Draggable, type DroppableProvided } from '@hello-pangea/dnd';
 import { useContext } from 'react';
 import { useRecoilValue } from 'recoil';
 
@@ -9,10 +9,11 @@ import { RecordBoardColumnFetchMoreLoader } from '@/object-record/record-board/r
 import { RecordBoardColumnNewRecordButton } from '@/object-record/record-board/record-board-column/components/RecordBoardColumnNewRecordButton';
 import { RecordBoardColumnContext } from '@/object-record/record-board/record-board-column/contexts/RecordBoardColumnContext';
 import { getNumberOfCardsPerColumnForSkeletonLoading } from '@/object-record/record-board/record-board-column/utils/getNumberOfCardsPerColumnForSkeletonLoading';
-import { isRecordBoardCompactModeActiveComponentState } from '@/object-record/record-board/states/isRecordBoardCompactModeActiveComponentState';
-import { recordBoardVisibleFieldDefinitionsComponentSelector } from '@/object-record/record-board/states/selectors/recordBoardVisibleFieldDefinitionsComponentSelector';
+import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
 import { isRecordIndexBoardColumnLoadingFamilyState } from '@/object-record/states/isRecordBoardColumnLoadingFamilyState';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
+import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
+
 const StyledColumnCardsContainer = styled.div`
   display: flex;
   flex: 1;
@@ -51,15 +52,15 @@ export const RecordBoardColumnCardsContainer = ({
     isRecordIndexBoardColumnLoadingFamilyState(columnId),
   );
 
-  const visibleFieldDefinitions = useRecoilComponentValueV2(
-    recordBoardVisibleFieldDefinitionsComponentSelector,
+  const visibleRecordFields = useRecoilComponentValue(
+    visibleRecordFieldsComponentSelector,
   );
 
-  const numberOfFields = visibleFieldDefinitions.length;
+  const numberOfFields = visibleRecordFields.length;
 
-  const isCompactModeActive = useRecoilComponentValueV2(
-    isRecordBoardCompactModeActiveComponentState,
-  );
+  const { currentView } = useGetCurrentViewOnly();
+
+  const isCompactModeActive = currentView?.isCompact ?? false;
 
   return (
     <StyledColumnCardsContainer

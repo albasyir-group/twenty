@@ -34,6 +34,7 @@ import { MessageQueueModule } from 'src/engine/core-modules/message-queue/messag
 import { UserWorkspace } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
+import { BillingSubscriptionPhaseService } from 'src/engine/core-modules/billing/services/billing-subscription-phase.service';
 
 @Module({
   imports: [
@@ -43,27 +44,25 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
     MessageQueueModule,
     PermissionsModule,
     AiModule,
-    TypeOrmModule.forFeature(
-      [
-        BillingSubscription,
-        BillingSubscriptionItem,
-        BillingCustomer,
-        BillingProduct,
-        BillingPrice,
-        BillingMeter,
-        BillingEntitlement,
-        Workspace,
-        UserWorkspace,
-        FeatureFlag,
-      ],
-      'core',
-    ),
+    TypeOrmModule.forFeature([
+      BillingSubscription,
+      BillingSubscriptionItem,
+      BillingCustomer,
+      BillingProduct,
+      BillingPrice,
+      BillingMeter,
+      BillingEntitlement,
+      Workspace,
+      UserWorkspace,
+      FeatureFlag,
+    ]),
   ],
   providers: [
     BillingSubscriptionService,
     BillingSubscriptionItemService,
     BillingPortalWorkspaceService,
     BillingProductService,
+    BillingSubscriptionPhaseService,
     BillingResolver,
     BillingPlanService,
     BillingWorkspaceMemberListener,

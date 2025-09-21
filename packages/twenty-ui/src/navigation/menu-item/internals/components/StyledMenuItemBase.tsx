@@ -5,7 +5,7 @@ import { isUndefined } from '@sniptt/guards';
 
 import { IconCheck } from '@ui/display';
 import { HOVER_BACKGROUND } from '@ui/theme';
-import { MenuItemAccent } from '../../types/MenuItemAccent';
+import { type MenuItemAccent } from '../../types/MenuItemAccent';
 
 export type MenuItemBaseProps = {
   accent?: MenuItemAccent;
@@ -138,14 +138,12 @@ export const StyledHoverableMenuItemBase = styled(StyledMenuItemBase)<{
     css`
       & .hoverable-buttons {
         opacity: 0;
-        position: fixed;
         right: ${theme.spacing(2)};
       }
 
       &:hover {
         & .hoverable-buttons {
           opacity: 1;
-          position: static;
         }
       }
     `};

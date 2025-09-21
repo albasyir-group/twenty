@@ -4,7 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import omit from 'lodash.omit';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
+import { TwoFactorAuthenticationStrategy } from 'twenty-shared/types';
 import { Repository } from 'typeorm';
+import { assertIsDefinedOrThrow } from 'twenty-shared/utils';
 
 import { ApiKeyTokenInput } from 'src/engine/core-modules/auth/dto/api-key-token.input';
 import { AppTokenInput } from 'src/engine/core-modules/auth/dto/app-token.input';
@@ -18,17 +20,19 @@ import { UpdatePasswordViaResetTokenInput } from 'src/engine/core-modules/auth/d
 import { ValidatePasswordResetToken } from 'src/engine/core-modules/auth/dto/validate-password-reset-token.entity';
 import { ValidatePasswordResetTokenInput } from 'src/engine/core-modules/auth/dto/validate-password-reset-token.input';
 import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
-import { ApiKeyService } from 'src/engine/core-modules/auth/services/api-key.service';
 // import { OAuthService } from 'src/engine/core-modules/auth/services/oauth.service';
+import { ApiKeyService } from 'src/engine/core-modules/api-key/api-key.service';
 import { AppToken } from 'src/engine/core-modules/app-token/app-token.entity';
+import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
+import { MONITORING_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/monitoring/monitoring';
 import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
 import { AvailableWorkspacesAndAccessTokensOutput } from 'src/engine/core-modules/auth/dto/available-workspaces-and-access-tokens.output';
+import { GetAuthTokenFromEmailVerificationTokenInput } from 'src/engine/core-modules/auth/dto/get-auth-token-from-email-verification-token.input';
 import { GetAuthorizationUrlForSSOInput } from 'src/engine/core-modules/auth/dto/get-authorization-url-for-sso.input';
 import { GetAuthorizationUrlForSSOOutput } from 'src/engine/core-modules/auth/dto/get-authorization-url-for-sso.output';
-import { GetLoginTokenFromEmailVerificationTokenInput } from 'src/engine/core-modules/auth/dto/get-login-token-from-email-verification-token.input';
 import { GetLoginTokenFromEmailVerificationTokenOutput } from 'src/engine/core-modules/auth/dto/get-login-token-from-email-verification-token.output';
 import { SignUpOutput } from 'src/engine/core-modules/auth/dto/sign-up.output';
 import { ResetPasswordService } from 'src/engine/core-modules/auth/services/reset-password.service';
@@ -39,8 +43,12 @@ import { RefreshTokenService } from 'src/engine/core-modules/auth/token/services
 import { RenewTokenService } from 'src/engine/core-modules/auth/token/services/renew-token.service';
 import { TransientTokenService } from 'src/engine/core-modules/auth/token/services/transient-token.service';
 import { WorkspaceAgnosticTokenService } from 'src/engine/core-modules/auth/token/services/workspace-agnostic-token.service';
-import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/auth-context.type';
+import {
+  JwtTokenTypeEnum,
+  LoginTokenJwtPayload,
+} from 'src/engine/core-modules/auth/types/auth-context.type';
 import { CaptchaGuard } from 'src/engine/core-modules/captcha/captcha.guard';
+import { CaptchaGraphqlApiExceptionFilter } from 'src/engine/core-modules/captcha/filters/captcha-graphql-api-exception.filter';
 import { DomainManagerService } from 'src/engine/core-modules/domain-manager/services/domain-manager.service';
 import { EmailVerificationExceptionFilter } from 'src/engine/core-modules/email-verification/email-verification-exception-filter.util';
 import { EmailVerificationService } from 'src/engine/core-modules/email-verification/services/email-verification.service';
@@ -48,12 +56,15 @@ import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { I18nContext } from 'src/engine/core-modules/i18n/types/i18n-context.type';
 import { SSOService } from 'src/engine/core-modules/sso/services/sso.service';
+import { TwoFactorAuthenticationVerificationInput } from 'src/engine/core-modules/two-factor-authentication/dto/two-factor-authentication-verification.input';
+import { TwoFactorAuthenticationExceptionFilter } from 'src/engine/core-modules/two-factor-authentication/two-factor-authentication-exception.filter';
+import { TwoFactorAuthenticationService } from 'src/engine/core-modules/two-factor-authentication/two-factor-authentication.service';
+import { UserWorkspace } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
 import { UserService } from 'src/engine/core-modules/user/services/user.service';
 import { User } from 'src/engine/core-modules/user/user.entity';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { Workspace } from 'src/engine/core-modules/workspace/workspace.entity';
-import { workspaceValidator } from 'src/engine/core-modules/workspace/workspace.validate';
 import { AuthProvider } from 'src/engine/decorators/auth/auth-provider.decorator';
 import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -61,7 +72,7 @@ import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 import { SettingsPermissionsGuard } from 'src/engine/guards/settings-permissions.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-import { SettingPermissionType } from 'src/engine/metadata-modules/permissions/constants/setting-permission-type.constants';
+import { PermissionFlagType } from 'src/engine/metadata-modules/permissions/constants/permission-flag-type.constants';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
 
 import { GetAuthTokensFromLoginTokenInput } from './dto/get-auth-tokens-from-login-token.input';
@@ -78,17 +89,20 @@ import { AuthService } from './services/auth.service';
 @UsePipes(ResolverValidationPipe)
 @Resolver()
 @UseFilters(
+  CaptchaGraphqlApiExceptionFilter,
   AuthGraphqlApiExceptionFilter,
   PermissionsGraphqlApiExceptionFilter,
   EmailVerificationExceptionFilter,
+  TwoFactorAuthenticationExceptionFilter,
   PreventNestToAutoLogGraphqlErrorsFilter,
 )
 export class AuthResolver {
   constructor(
-    @InjectRepository(User, 'core')
+    @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(AppToken, 'core')
+    @InjectRepository(AppToken)
     private readonly appTokenRepository: Repository<AppToken>,
+    private readonly twoFactorAuthenticationService: TwoFactorAuthenticationService,
     private authService: AuthService,
     private renewTokenService: RenewTokenService,
     private userService: UserService,
@@ -105,6 +119,7 @@ export class AuthResolver {
     private userWorkspaceService: UserWorkspaceService,
     private emailVerificationTokenService: EmailVerificationTokenService,
     private sSOService: SSOService,
+    private readonly auditService: AuditService,
   ) {}
 
   @UseGuards(CaptchaGuard, PublicEndpointGuard)
@@ -160,7 +175,7 @@ export class AuthResolver {
         origin,
       );
 
-    workspaceValidator.assertIsDefinedOrThrow(
+    assertIsDefinedOrThrow(
       workspace,
       new AuthException(
         'Workspace not found',
@@ -205,7 +220,7 @@ export class AuthResolver {
           AuthProviderEnum.Password,
         ),
       tokens: {
-        accessToken:
+        accessOrWorkspaceAgnosticToken:
           await this.workspaceAgnosticTokenService.generateWorkspaceAgnosticToken(
             {
               userId: user.id,
@@ -225,13 +240,13 @@ export class AuthResolver {
   @UseGuards(PublicEndpointGuard)
   async getLoginTokenFromEmailVerificationToken(
     @Args()
-    getLoginTokenFromEmailVerificationTokenInput: GetLoginTokenFromEmailVerificationTokenInput,
+    getAuthTokenFromEmailVerificationTokenInput: GetAuthTokenFromEmailVerificationTokenInput,
     @Args('origin') origin: string,
     @AuthProvider() authProvider: AuthProviderEnum,
   ) {
     const appToken =
       await this.emailVerificationTokenService.validateEmailVerificationTokenOrThrow(
-        getLoginTokenFromEmailVerificationTokenInput,
+        getAuthTokenFromEmailVerificationTokenInput,
       );
 
     const workspace =
@@ -257,6 +272,88 @@ export class AuthResolver {
   }
 
   @Mutation(() => AvailableWorkspacesAndAccessTokensOutput)
+  @UseGuards(PublicEndpointGuard)
+  async getWorkspaceAgnosticTokenFromEmailVerificationToken(
+    @Args()
+    getAuthTokenFromEmailVerificationTokenInput: GetAuthTokenFromEmailVerificationTokenInput,
+    @AuthProvider() authProvider: AuthProviderEnum,
+  ) {
+    const appToken =
+      await this.emailVerificationTokenService.validateEmailVerificationTokenOrThrow(
+        getAuthTokenFromEmailVerificationTokenInput,
+      );
+
+    await this.userService.markEmailAsVerified(appToken.user.id);
+    await this.appTokenRepository.remove(appToken);
+
+    const availableWorkspaces =
+      await this.userWorkspaceService.findAvailableWorkspacesByEmail(
+        appToken.user.email,
+      );
+
+    return {
+      availableWorkspaces:
+        await this.userWorkspaceService.setLoginTokenToAvailableWorkspacesWhenAuthProviderMatch(
+          availableWorkspaces,
+          appToken.user,
+          authProvider,
+        ),
+      tokens: {
+        accessOrWorkspaceAgnosticToken:
+          await this.workspaceAgnosticTokenService.generateWorkspaceAgnosticToken(
+            {
+              userId: appToken.user.id,
+              authProvider: AuthProviderEnum.Password,
+            },
+          ),
+        refreshToken: await this.refreshTokenService.generateRefreshToken({
+          userId: appToken.user.id,
+          authProvider: AuthProviderEnum.Password,
+          targetedTokenType: JwtTokenTypeEnum.WORKSPACE_AGNOSTIC,
+        }),
+      },
+    };
+  }
+
+  @Mutation(() => AuthTokens)
+  @UseGuards(CaptchaGuard, PublicEndpointGuard)
+  async getAuthTokensFromOTP(
+    @Args()
+    twoFactorAuthenticationVerificationInput: TwoFactorAuthenticationVerificationInput,
+    @Args('origin') origin: string,
+  ): Promise<AuthTokens> {
+    const { sub: email, authProvider } =
+      await this.loginTokenService.verifyLoginToken(
+        twoFactorAuthenticationVerificationInput.loginToken,
+      );
+
+    const workspace =
+      await this.domainManagerService.getWorkspaceByOriginOrDefaultWorkspace(
+        origin,
+      );
+
+    assertIsDefinedOrThrow(
+      workspace,
+
+      new AuthException(
+        'Workspace not found',
+        AuthExceptionCode.WORKSPACE_NOT_FOUND,
+      ),
+    );
+
+    const user = await this.userService.getUserByEmail(email);
+
+    await this.twoFactorAuthenticationService.validateStrategy(
+      user.id,
+      twoFactorAuthenticationVerificationInput.otp,
+      workspace.id,
+      TwoFactorAuthenticationStrategy.TOTP,
+    );
+
+    return await this.authService.verify(email, workspace.id, authProvider);
+  }
+
+  @Mutation(() => AvailableWorkspacesAndAccessTokensOutput)
   @UseGuards(CaptchaGuard, PublicEndpointGuard)
   async signUp(
     @Args() signUpInput: UserCredentialsInput,
@@ -276,6 +373,14 @@ export class AuthResolver {
         user.email,
       );
 
+    await this.emailVerificationService.sendVerificationEmail(
+      user.id,
+      user.email,
+      undefined,
+      signUpInput.locale ?? SOURCE_LOCALE,
+      signUpInput.verifyEmailRedirectPath,
+    );
+
     return {
       availableWorkspaces:
         await this.userWorkspaceService.setLoginTokenToAvailableWorkspacesWhenAuthProviderMatch(
@@ -284,7 +389,7 @@ export class AuthResolver {
           AuthProviderEnum.Password,
         ),
       tokens: {
-        accessToken:
+        accessOrWorkspaceAgnosticToken:
           await this.workspaceAgnosticTokenService.generateWorkspaceAgnosticToken(
             {
               userId: user.id,
@@ -357,7 +462,7 @@ export class AuthResolver {
       user.email,
       workspace,
       signUpInput.locale ?? SOURCE_LOCALE,
-      signUpInput.verifyEmailNextPath,
+      signUpInput.verifyEmailRedirectPath,
     );
 
     const loginToken = await this.loginTokenService.generateLoginToken(
@@ -439,29 +544,174 @@ export class AuthResolver {
     @Args() getAuthTokensFromLoginTokenInput: GetAuthTokensFromLoginTokenInput,
     @Args('origin') origin: string,
   ): Promise<AuthTokens> {
-    const {
-      sub: email,
-      workspaceId,
-      authProvider,
-    } = await this.loginTokenService.verifyLoginToken(
+    const tokenPayload = await this.validateAndDecodeLoginToken(
       getAuthTokensFromLoginTokenInput.loginToken,
     );
 
+    const workspace = await this.validateWorkspaceAccess(
+      origin,
+      tokenPayload.workspaceId,
+    );
+
+    const { user, userWorkspace } = await this.validateUserAccess(
+      tokenPayload.sub,
+      tokenPayload.workspaceId,
+    );
+
+    if (tokenPayload.authProvider === AuthProviderEnum.Impersonation) {
+      await this.validateAndLogImpersonation(
+        tokenPayload,
+        workspace,
+        user.email,
+      );
+    } else {
+      await this.validateRegularAuthentication(workspace, userWorkspace);
+    }
+
+    return await this.authService.verify(
+      user.email,
+      workspace.id,
+      tokenPayload.authProvider,
+    );
+  }
+
+  private async validateAndDecodeLoginToken(
+    loginToken: string,
+  ): Promise<LoginTokenJwtPayload> {
+    return await this.loginTokenService.verifyLoginToken(loginToken);
+  }
+
+  private async validateWorkspaceAccess(
+    origin: string,
+    tokenWorkspaceId: string,
+  ): Promise<Workspace> {
     const workspace =
       await this.domainManagerService.getWorkspaceByOriginOrDefaultWorkspace(
         origin,
       );
 
-    workspaceValidator.assertIsDefinedOrThrow(workspace);
+    assertIsDefinedOrThrow(
+      workspace,
+      new AuthException(
+        'Workspace not found',
+        AuthExceptionCode.WORKSPACE_NOT_FOUND,
+      ),
+    );
 
-    if (workspaceId !== workspace.id) {
+    if (tokenWorkspaceId !== workspace.id) {
       throw new AuthException(
         'Token is not valid for this workspace',
         AuthExceptionCode.FORBIDDEN_EXCEPTION,
       );
     }
 
-    return await this.authService.verify(email, workspace.id, authProvider);
+    return workspace;
+  }
+
+  private async validateUserAccess(
+    email: string,
+    workspaceId: string,
+  ): Promise<{ user: User; userWorkspace: UserWorkspace }> {
+    const user = await this.userService.getUserByEmail(email);
+
+    await this.authService.checkIsEmailVerified(user.isEmailVerified);
+
+    const userWorkspace =
+      await this.userWorkspaceService.getUserWorkspaceForUserOrThrow({
+        userId: user.id,
+        workspaceId,
+      });
+
+    return { user, userWorkspace };
+  }
+
+  private async validateRegularAuthentication(
+    workspace: Workspace,
+    userWorkspace: UserWorkspace,
+  ): Promise<void> {
+    await this.twoFactorAuthenticationService.validateTwoFactorAuthenticationRequirement(
+      workspace,
+      userWorkspace.twoFactorAuthenticationMethods,
+    );
+  }
+
+  private async validateAndLogImpersonation(
+    tokenPayload: LoginTokenJwtPayload,
+    workspace: Workspace,
+    targetUserEmail: string,
+  ): Promise<void> {
+    const { impersonatorUserId } = tokenPayload;
+
+    const auditService = this.auditService.createContext({
+      workspaceId: workspace.id,
+      userId: impersonatorUserId,
+    });
+
+    await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+      eventName: 'server.impersonation.token_exchange_attempt',
+      message: `Impersonation token exchange attempt for ${targetUserEmail} by ${impersonatorUserId}`,
+    });
+
+    if (workspace.allowImpersonation !== true) {
+      throw new AuthException(
+        'Impersonation not allowed on this workspace',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
+
+    if (!impersonatorUserId) {
+      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+        eventName: 'server.impersonation.token_exchange_failed',
+        message: `Invalid impersonation token (missing impersonator user ID) for ${targetUserEmail}`,
+      });
+      throw new AuthException(
+        'Invalid impersonation token (missing impersonator user ID)',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
+
+    const impersonatorUser = await this.userRepository.findOne({
+      where: { id: impersonatorUserId },
+    });
+
+    if (!impersonatorUser) {
+      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+        eventName: 'server.impersonation.token_exchange_failed',
+        message: `Impersonator user not found: ${impersonatorUserId} for ${targetUserEmail}`,
+      });
+      throw new AuthException(
+        'Impersonator user not found',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
+
+    if (impersonatorUser.canImpersonate !== true) {
+      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+        eventName: 'server.impersonation.token_exchange_failed',
+        message: `User not authorized to impersonate: ${impersonatorUserId} for ${targetUserEmail}`,
+      });
+      throw new AuthException(
+        'User not authorized to impersonate',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
+
+    await this.logImpersonationEvent(workspace.id, impersonatorUserId);
+  }
+
+  private async logImpersonationEvent(
+    workspaceId: string,
+    impersonatorUserId: string,
+  ): Promise<void> {
+    const auditService = this.auditService.createContext({
+      workspaceId,
+      userId: impersonatorUserId,
+    });
+
+    await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+      eventName: 'server.impersonation.login_token_exchanged',
+      message: 'Impersonation token exchanged',
+    });
   }
 
   @Mutation(() => AuthorizeApp)
@@ -490,7 +740,7 @@ export class AuthResolver {
 
   @UseGuards(
     WorkspaceAuthGuard,
-    SettingsPermissionsGuard(SettingPermissionType.API_KEYS_AND_WEBHOOKS),
+    SettingsPermissionsGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS),
   )
   @Mutation(() => ApiKeyToken)
   async generateApiKeyToken(
@@ -519,7 +769,7 @@ export class AuthResolver {
     return await this.resetPasswordService.sendEmailPasswordResetLink(
       resetToken,
       emailPasswordResetInput.email,
-      context.req.headers['x-locale'] || SOURCE_LOCALE,
+      context.req.locale,
     );
   }
 
@@ -528,18 +778,13 @@ export class AuthResolver {
   async updatePasswordViaResetToken(
     @Args()
     { passwordResetToken, newPassword }: UpdatePasswordViaResetTokenInput,
-    @Context() context: I18nContext,
   ): Promise<InvalidatePassword> {
     const { id } =
       await this.resetPasswordService.validatePasswordResetToken(
         passwordResetToken,
       );
 
-    await this.authService.updatePassword(
-      id,
-      newPassword,
-      context.req.headers['x-locale'] || SOURCE_LOCALE,
-    );
+    await this.authService.updatePassword(id, newPassword);
 
     return await this.resetPasswordService.invalidatePasswordResetToken(id);
   }

@@ -1,5 +1,6 @@
-import { SettingsIntegrationCategory } from '@/settings/integrations/types/SettingsIntegrationCategory';
-import { REACT_APP_SERVER_BASE_URL } from '~/config';
+import { type SettingsIntegrationCategory } from '@/settings/integrations/types/SettingsIntegrationCategory';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath } from 'twenty-shared/utils';
 
 export const SETTINGS_INTEGRATION_AI_CATEGORY: SettingsIntegrationCategory = {
   key: 'ai',
@@ -11,26 +12,9 @@ export const SETTINGS_INTEGRATION_AI_CATEGORY: SettingsIntegrationCategory = {
         key: 'mcp',
         image: '/images/integrations/mcp.svg',
       },
-      to: null,
-      type: 'Copy',
-      content: JSON.stringify(
-        {
-          mcpServers: {
-            twenty: {
-              type: 'remote',
-              url: `${REACT_APP_SERVER_BASE_URL}/mcp`,
-              headers: {
-                Authorization: 'Bearer [API_KEY]',
-              },
-            },
-          },
-        },
-        null,
-        2,
-      ),
+      type: 'Add',
       text: 'Connect MCP Client',
-      link: '#',
-      linkText: 'Copy',
+      link: getSettingsPath(SettingsPath.IntegrationMCP),
     },
   ],
 };

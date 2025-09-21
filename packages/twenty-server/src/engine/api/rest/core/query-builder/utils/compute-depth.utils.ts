@@ -1,8 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { Request } from 'express';
+import { type Request } from 'express';
 
-const ALLOWED_DEPTH_VALUES = [0, 1, 2];
+const ALLOWED_DEPTH_VALUES = [0, 1];
 
 export const computeDepth = (request: Request): number | undefined => {
   if (!request.query.depth) {

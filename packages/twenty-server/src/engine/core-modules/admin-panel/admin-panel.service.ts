@@ -4,12 +4,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import semver from 'semver';
 import { Repository } from 'typeorm';
+import * as z from 'zod';
 
-import { ConfigVariable } from 'src/engine/core-modules/admin-panel/dtos/config-variable.dto';
-import { ConfigVariablesGroupData } from 'src/engine/core-modules/admin-panel/dtos/config-variables-group.dto';
-import { ConfigVariablesOutput } from 'src/engine/core-modules/admin-panel/dtos/config-variables.output';
-import { UserLookup } from 'src/engine/core-modules/admin-panel/dtos/user-lookup.entity';
-import { VersionInfo } from 'src/engine/core-modules/admin-panel/dtos/version-info.dto';
+import { type ConfigVariable } from 'src/engine/core-modules/admin-panel/dtos/config-variable.dto';
+import { type ConfigVariablesGroupData } from 'src/engine/core-modules/admin-panel/dtos/config-variables-group.dto';
+import { type ConfigVariablesOutput } from 'src/engine/core-modules/admin-panel/dtos/config-variables.output';
+import { type UserLookup } from 'src/engine/core-modules/admin-panel/dtos/user-lookup.entity';
+import { type VersionInfo } from 'src/engine/core-modules/admin-panel/dtos/version-info.dto';
+import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
+import { MONITORING_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/monitoring/monitoring';
 import {
   AuthException,
   AuthExceptionCode,
@@ -17,13 +20,14 @@ import {
 import { LoginTokenService } from 'src/engine/core-modules/auth/token/services/login-token.service';
 import { DomainManagerService } from 'src/engine/core-modules/domain-manager/services/domain-manager.service';
 import { FeatureFlagKey } from 'src/engine/core-modules/feature-flag/enums/feature-flag-key.enum';
-import { FeatureFlag } from 'src/engine/core-modules/feature-flag/feature-flag.entity';
-import { ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
+import { type FeatureFlag } from 'src/engine/core-modules/feature-flag/feature-flag.entity';
+import { type ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
 import { CONFIG_VARIABLES_GROUP_METADATA } from 'src/engine/core-modules/twenty-config/constants/config-variables-group-metadata';
-import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
+import { type ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { User } from 'src/engine/core-modules/user/user.entity';
 import { userValidator } from 'src/engine/core-modules/user/user.validate';
+import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 
 @Injectable()
 export class AdminPanelService {
@@ -31,46 +35,86 @@ export class AdminPanelService {
     private readonly loginTokenService: LoginTokenService,
     private readonly twentyConfigService: TwentyConfigService,
     private readonly domainManagerService: DomainManagerService,
-    @InjectRepository(User, 'core')
+    private readonly auditService: AuditService,
+    @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
 
-  async impersonate(userId: string, workspaceId: string) {
+  async impersonate(
+    userId: string,
+    workspaceId: string,
+    impersonatorUserId: string,
+  ) {
     const user = await this.userRepository.findOne({
       where: {
         id: userId,
-        workspaces: {
+        userWorkspaces: {
           workspaceId,
           workspace: {
             allowImpersonation: true,
           },
         },
       },
-      relations: ['workspaces', 'workspaces.workspace'],
+      relations: { userWorkspaces: { workspace: true } },
     });
 
     userValidator.assertIsDefinedOrThrow(
       user,
       new AuthException(
-        'User not found or impersonation not enable on workspace',
-        AuthExceptionCode.INVALID_INPUT,
+        'User not found in workspace or impersonation not enabled',
+        AuthExceptionCode.USER_WORKSPACE_NOT_FOUND,
       ),
     );
 
-    const loginToken = await this.loginTokenService.generateLoginToken(
-      user.email,
-      user.workspaces[0].workspace.id,
-    );
+    const auditService = this.auditService.createContext({
+      workspaceId: user.userWorkspaces[0].workspace.id,
+      userId: impersonatorUserId,
+    });
 
-    return {
-      workspace: {
-        id: user.workspaces[0].workspace.id,
-        workspaceUrls: this.domainManagerService.getWorkspaceUrls(
-          user.workspaces[0].workspace,
-        ),
-      },
-      loginToken,
-    };
+    await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+      eventName: 'server.impersonation.attempt',
+      message: `Impersonation attempt: targetUserId=${userId}, workspaceId=${workspaceId}, impersonatorUserId=${impersonatorUserId}`,
+    });
+
+    try {
+      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+        eventName: 'server.impersonation.login_token_attempt',
+        message: `Impersonation token generation attempt for user ${userId}`,
+      });
+
+      const loginToken = await this.loginTokenService.generateLoginToken(
+        user.email,
+        user.userWorkspaces[0].workspace.id,
+        AuthProviderEnum.Impersonation,
+        {
+          impersonatorUserId,
+        },
+      );
+
+      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+        eventName: 'server.impersonation.login_token_generated',
+        message: `Impersonation token generated successfully for user ${userId}`,
+      });
+
+      return {
+        workspace: {
+          id: user.userWorkspaces[0].workspace.id,
+          workspaceUrls: this.domainManagerService.getWorkspaceUrls(
+            user.userWorkspaces[0].workspace,
+          ),
+        },
+        loginToken,
+      };
+    } catch {
+      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
+        eventName: 'server.impersonation.login_token_failed',
+        message: `Impersonation token generation failed for targetUserId=${userId}`,
+      });
+      throw new AuthException(
+        'Impersonation failed',
+        AuthExceptionCode.INVALID_DATA,
+      );
+    }
   }
 
   async userLookup(userIdentifier: string): Promise<UserLookup> {
@@ -78,13 +122,16 @@ export class AdminPanelService {
 
     const targetUser = await this.userRepository.findOne({
       where: isEmail ? { email: userIdentifier } : { id: userIdentifier },
-      relations: [
-        'workspaces',
-        'workspaces.workspace',
-        'workspaces.workspace.workspaceUsers',
-        'workspaces.workspace.workspaceUsers.user',
-        'workspaces.workspace.featureFlags',
-      ],
+      relations: {
+        userWorkspaces: {
+          workspace: {
+            workspaceUsers: {
+              user: true,
+            },
+            featureFlags: true,
+          },
+        },
+      },
     });
 
     userValidator.assertIsDefinedOrThrow(
@@ -101,7 +148,7 @@ export class AdminPanelService {
         firstName: targetUser.firstName,
         lastName: targetUser.lastName,
       },
-      workspaces: targetUser.workspaces.map((userWorkspace) => ({
+      workspaces: targetUser.userWorkspaces.map((userWorkspace) => ({
         id: userWorkspace.workspace.id,
         name: userWorkspace.workspace.displayName ?? '',
         totalUsers: userWorkspace.workspace.workspaceUsers.length,
@@ -196,28 +243,30 @@ export class AdminPanelService {
     const currentVersion = this.twentyConfigService.get('APP_VERSION');
 
     try {
-      const response = await axios.get(
+      const rawResponse = await axios.get<unknown>(
         'https://hub.docker.com/v2/repositories/twentycrm/twenty/tags?page_size=100',
       );
+      const response = z
+        .object({
+          data: z.object({
+            results: z.array(z.object({ name: z.string() })),
+          }),
+        })
+        .parse(rawResponse);
 
       const versions = response.data.results
-        // @ts-expect-error legacy noImplicitAny
-        .filter((tag) => tag && tag.name !== 'latest')
-        // @ts-expect-error legacy noImplicitAny
-        .map((tag) => semver.coerce(tag.name)?.version)
-        // @ts-expect-error legacy noImplicitAny
-        .filter((version) => version !== undefined);
+        .map((tag) => tag.name)
+        .filter((name) => name !== 'latest' && semver.valid(name));
 
       if (versions.length === 0) {
         return { currentVersion, latestVersion: 'latest' };
       }
 
-      // @ts-expect-error legacy noImplicitAny
       versions.sort((a, b) => semver.compare(b, a));
       const latestVersion = versions[0];
 
       return { currentVersion, latestVersion };
-    } catch (error) {
+    } catch {
       return { currentVersion, latestVersion: 'latest' };
     }
   }

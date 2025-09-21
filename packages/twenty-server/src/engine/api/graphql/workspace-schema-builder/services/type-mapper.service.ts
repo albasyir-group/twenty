@@ -3,19 +3,24 @@ import { GraphQLISODateTime } from '@nestjs/graphql';
 
 import {
   GraphQLBoolean,
-  GraphQLEnumType,
+  type GraphQLEnumType,
   GraphQLID,
-  GraphQLInputObjectType,
-  GraphQLInputType,
+  type GraphQLInputObjectType,
+  type GraphQLInputType,
   GraphQLList,
   GraphQLNonNull,
-  GraphQLScalarType,
+  type GraphQLScalarType,
   GraphQLString,
-  GraphQLType,
+  type GraphQLType,
 } from 'graphql';
+import GraphQLJSON from 'graphql-type-json';
 import { FieldMetadataType } from 'twenty-shared/types';
 
-import { FieldMetadataSettings } from 'src/engine/metadata-modules/field-metadata/interfaces/field-metadata-settings.interface';
+import { FieldMetadataDefaultValue } from 'src/engine/metadata-modules/field-metadata/interfaces/field-metadata-default-value.interface';
+import {
+  type FieldMetadataSettings,
+  NumberDataType,
+} from 'src/engine/metadata-modules/field-metadata/interfaces/field-metadata-settings.interface';
 
 import { OrderByDirectionType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/enum';
 import {
@@ -38,16 +43,14 @@ import {
   UUIDScalarType,
 } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { PositionScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars/position.scalar';
-import { RawJSONScalar } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars/raw-json.scalar';
 import { getNumberFilterType } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-number-filter-type.util';
 import { getNumberScalarType } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-number-scalar-type.util';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface TypeOptions<T = any> {
+export interface TypeOptions {
   nullable?: boolean;
   isArray?: boolean;
   arrayDepth?: number;
-  defaultValue?: T;
+  defaultValue?: FieldMetadataDefaultValue<FieldMetadataType>;
   settings?: FieldMetadataSettings<FieldMetadataType>;
   isIdField?: boolean;
   isRelationConnectField?: boolean;
@@ -59,10 +62,13 @@ const StringArrayScalarType = new GraphQLList(GraphQLString);
 export class TypeMapperService {
   mapToScalarType(
     fieldMetadataType: FieldMetadataType,
-    settings?: FieldMetadataSettings<FieldMetadataType>,
-    isIdField?: boolean,
+    typeOptions?: TypeOptions,
   ): GraphQLScalarType | undefined {
-    if (isIdField || fieldMetadataType === FieldMetadataType.RELATION) {
+    if (
+      typeOptions?.isIdField ||
+      fieldMetadataType === FieldMetadataType.RELATION ||
+      fieldMetadataType === FieldMetadataType.MORPH_RELATION
+    ) {
       return GraphQLID;
     }
     const typeScalarMapping = new Map<FieldMetadataType, GraphQLScalarType>([
@@ -74,13 +80,14 @@ export class TypeMapperService {
       [
         FieldMetadataType.NUMBER,
         getNumberScalarType(
-          (settings as FieldMetadataSettings<FieldMetadataType.NUMBER>)
-            ?.dataType,
+          (
+            typeOptions?.settings as FieldMetadataSettings<FieldMetadataType.NUMBER>
+          )?.dataType ?? NumberDataType.FLOAT,
         ),
       ],
       [FieldMetadataType.NUMERIC, BigFloatScalarType],
       [FieldMetadataType.POSITION, PositionScalarType],
-      [FieldMetadataType.RAW_JSON, RawJSONScalar],
+      [FieldMetadataType.RAW_JSON, GraphQLJSON],
       [
         FieldMetadataType.ARRAY,
         StringArrayScalarType as unknown as GraphQLScalarType,
@@ -94,10 +101,13 @@ export class TypeMapperService {
 
   mapToFilterType(
     fieldMetadataType: FieldMetadataType,
-    settings?: FieldMetadataSettings<FieldMetadataType>,
-    isIdField?: boolean,
+    typeOptions?: TypeOptions,
   ): GraphQLInputObjectType | GraphQLScalarType | undefined {
-    if (isIdField || fieldMetadataType === FieldMetadataType.RELATION) {
+    if (
+      typeOptions?.isIdField ||
+      fieldMetadataType === FieldMetadataType.RELATION ||
+      fieldMetadataType === FieldMetadataType.MORPH_RELATION
+    ) {
       return UUIDFilterType;
     }
 
@@ -113,8 +123,9 @@ export class TypeMapperService {
       [
         FieldMetadataType.NUMBER,
         getNumberFilterType(
-          (settings as FieldMetadataSettings<FieldMetadataType.NUMBER>)
-            ?.dataType,
+          (
+            typeOptions?.settings as FieldMetadataSettings<FieldMetadataType.NUMBER>
+          )?.dataType,
         ),
       ],
       [FieldMetadataType.NUMERIC, BigFloatFilterType],
@@ -137,6 +148,7 @@ export class TypeMapperService {
     const typeOrderByMapping = new Map<FieldMetadataType, GraphQLEnumType>([
       [FieldMetadataType.UUID, OrderByDirectionType],
       [FieldMetadataType.RELATION, OrderByDirectionType],
+      [FieldMetadataType.MORPH_RELATION, OrderByDirectionType],
       [FieldMetadataType.TEXT, OrderByDirectionType],
       [FieldMetadataType.DATE_TIME, OrderByDirectionType],
       [FieldMetadataType.DATE, OrderByDirectionType],
@@ -156,7 +168,7 @@ export class TypeMapperService {
     return typeOrderByMapping.get(fieldMetadataType);
   }
 
-  mapToGqlType<T extends GraphQLType = GraphQLType>(
+  applyTypeOptions<T extends GraphQLType = GraphQLType>(
     typeRef: T,
     options: TypeOptions,
   ): T {

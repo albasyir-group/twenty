@@ -1,8 +1,11 @@
 import { useTheme } from '@emotion/react';
 import { Draggable } from '@hello-pangea/dnd';
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
+import { useRecordDragState } from '@/object-record/record-drag/shared/hooks/useRecordDragState';
+import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { RecordTableRowDraggableContextProvider } from '@/object-record/record-table/contexts/RecordTableRowDraggableContext';
+import { RecordTableRowMultiDragPreview } from '@/object-record/record-table/record-table-row/components/RecordTableRowMultiDragPreview';
 import { RecordTableTr } from '@/object-record/record-table/record-table-row/components/RecordTableTr';
 import { RecordTableTrEffect } from '@/object-record/record-table/record-table-row/components/RecordTableTrEffect';
 
@@ -26,6 +29,13 @@ export const RecordTableDraggableTr = ({
   children,
 }: RecordTableDraggableTrProps) => {
   const theme = useTheme();
+  const { recordTableId } = useRecordTableContextOrThrow();
+  const multiDragState = useRecordDragState('table', recordTableId);
+
+  const isSecondaryDragged =
+    multiDragState?.isDragging &&
+    multiDragState.originalSelection.includes(recordId) &&
+    recordId !== multiDragState.primaryDraggedRecordId;
 
   return (
     <Draggable
@@ -51,12 +61,14 @@ export const RecordTableDraggableTr = ({
               borderColor: draggableSnapshot.isDragging
                 ? `${theme.border.color.medium}`
                 : 'transparent',
+              opacity: isSecondaryDragged ? 0.3 : undefined,
             }}
             isDragging={draggableSnapshot.isDragging}
             data-testid={`row-id-${recordId}`}
             data-virtualized-id={recordId}
             data-selectable-id={recordId}
             onClick={onClick}
+            isFirstRowOfGroup={false}
           >
             <RecordTableRowDraggableContextProvider
               value={{
@@ -65,6 +77,9 @@ export const RecordTableDraggableTr = ({
               }}
             >
               {children}
+              <RecordTableRowMultiDragPreview
+                isDragging={draggableSnapshot.isDragging}
+              />
             </RecordTableRowDraggableContextProvider>
           </RecordTableTr>
         </>

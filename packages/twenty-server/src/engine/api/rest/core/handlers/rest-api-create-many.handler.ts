@@ -4,17 +4,18 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 
-import { Request } from 'express';
+import { type Request } from 'express';
+import isEmpty from 'lodash.isempty';
 import { isDefined } from 'twenty-shared/utils';
 
 import { RestApiBaseHandler } from 'src/engine/api/rest/core/interfaces/rest-api-base.handler';
 
-import { getObjectMetadataFromObjectMetadataItemWithFieldMaps } from 'src/engine/metadata-modules/utils/get-object-metadata-from-object-metadata-Item-with-field-maps';
+import { getAllSelectableFields } from 'src/engine/api/utils/get-all-selectable-fields.utils';
 
 @Injectable()
 export class RestApiCreateManyHandler extends RestApiBaseHandler {
   async handle(request: Request) {
-    const { objectMetadata, repository } =
+    const { objectMetadata, repository, restrictedFields } =
       await this.getRepositoryAndMetadataOrFail(request);
 
     const body = request.body;
@@ -58,21 +59,34 @@ export class RestApiCreateManyHandler extends RestApiBaseHandler {
         this.getAuthContextFromRequest(request),
       );
 
-    const createdRecords = await repository.save(recordsToCreate);
+    let selectedColumns = undefined;
 
-    this.apiEventEmitterService.emitCreateEvents({
-      records: createdRecords,
-      authContext: this.getAuthContextFromRequest(request),
-      objectMetadataItem: getObjectMetadataFromObjectMetadataItemWithFieldMaps(
-        objectMetadata.objectMetadataMapItem,
-      ),
-    });
+    if (!isEmpty(restrictedFields)) {
+      const selectableFields = getAllSelectableFields({
+        restrictedFields,
+        objectMetadata,
+      });
+
+      selectedColumns = Object.keys(selectableFields).filter(
+        (key) => selectableFields[key],
+      );
+    }
+
+    const createdRecords = await repository.insert(
+      recordsToCreate,
+      undefined,
+      selectedColumns,
+    );
+    const createdRecordsIds = createdRecords.identifiers.map(
+      (record) => record.id,
+    );
 
     const records = await this.getRecord({
-      recordIds: createdRecords.map((record) => record.id),
+      recordIds: createdRecordsIds,
       repository,
       objectMetadata,
       depth: this.depthInputFactory.create(request),
+      restrictedFields,
     });
 
     if (records.length !== body.length) {

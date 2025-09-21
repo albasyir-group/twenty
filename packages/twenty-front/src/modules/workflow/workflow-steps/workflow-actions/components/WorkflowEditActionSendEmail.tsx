@@ -1,17 +1,17 @@
 import { GMAIL_SEND_SCOPE } from '@/accounts/constants/GmailSendScope';
 import { MICROSOFT_SEND_SCOPE } from '@/accounts/constants/MicrosoftSendScope';
-import { ConnectedAccount } from '@/accounts/types/ConnectedAccount';
+import { type ConnectedAccount } from '@/accounts/types/ConnectedAccount';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { useCommandMenu } from '@/command-menu/hooks/useCommandMenu';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
-import { FormTextFieldInput } from '@/object-record/record-field/form-types/components/FormTextFieldInput';
+import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
 import { useTriggerApisOAuth } from '@/settings/accounts/hooks/useTriggerApiOAuth';
-import { SettingsPath } from '@/types/SettingsPath';
 import { Select } from '@/ui/input/components/Select';
 import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { workflowVisualizerWorkflowIdComponentState } from '@/workflow/states/workflowVisualizerWorkflowIdComponentState';
-import { WorkflowSendEmailAction } from '@/workflow/types/Workflow';
+import { type WorkflowSendEmailAction } from '@/workflow/types/Workflow';
+import { WorkflowActionFooter } from '@/workflow/workflow-steps/components/WorkflowActionFooter';
 import { WorkflowStepBody } from '@/workflow/workflow-steps/components/WorkflowStepBody';
 import { WorkflowStepHeader } from '@/workflow/workflow-steps/components/WorkflowStepHeader';
 import { useWorkflowActionHeader } from '@/workflow/workflow-steps/workflow-actions/hooks/useWorkflowActionHeader';
@@ -19,11 +19,11 @@ import { WorkflowVariablePicker } from '@/workflow/workflow-variables/components
 import { useTheme } from '@emotion/react';
 import { useEffect, useState } from 'react';
 import { useRecoilValue } from 'recoil';
-import { ConnectedAccountProvider } from 'twenty-shared/types';
+import { ConnectedAccountProvider, SettingsPath } from 'twenty-shared/types';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 import { IconPlus, useIcons } from 'twenty-ui/display';
-import { SelectOption } from 'twenty-ui/input';
-import { JsonValue } from 'type-fest';
+import { type SelectOption } from 'twenty-ui/input';
+import { type JsonValue } from 'type-fest';
 import { useDebouncedCallback } from 'use-debounce';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
@@ -55,7 +55,7 @@ export const WorkflowEditActionSendEmail = ({
   const currentWorkspaceMember = useRecoilValue(currentWorkspaceMemberState);
   const { triggerApisOAuth } = useTriggerApisOAuth();
 
-  const workflowVisualizerWorkflowId = useRecoilComponentValueV2(
+  const workflowVisualizerWorkflowId = useRecoilComponentValue(
     workflowVisualizerWorkflowIdComponentState,
   );
   const redirectUrl = `/object/workflow/${workflowVisualizerWorkflowId}`;
@@ -98,7 +98,10 @@ export const WorkflowEditActionSendEmail = ({
       }
     };
 
-    if (!isDefined(scopes) || !hasSendScope(connectedAccount, scopes)) {
+    if (
+      connectedAccount.provider !== ConnectedAccountProvider.IMAP_SMTP_CALDAV &&
+      (!isDefined(scopes) || !hasSendScope(connectedAccount, scopes))
+    ) {
       await triggerApisOAuth(connectedAccount.provider, {
         redirectLocation: redirectUrl,
         loginHint: connectedAccount.handle,
@@ -180,6 +183,7 @@ export const WorkflowEditActionSendEmail = ({
       provider: true,
       scopes: true,
       accountOwnerId: true,
+      connectionParameters: true,
     },
   });
 
@@ -291,6 +295,7 @@ export const WorkflowEditActionSendEmail = ({
             multiline
           />
         </WorkflowStepBody>
+        {!actionOptions.readonly && <WorkflowActionFooter stepId={action.id} />}
       </>
     )
   );

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { metadataLabelSchema } from '@/object-metadata/validation-schemas/metadataLabelSchema';
 import { themeColorSchema } from 'twenty-ui/theme';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
@@ -12,13 +12,17 @@ export const fieldMetadataItemSchema = (existingLabels?: string[]) => {
     createdAt: z.string().datetime(),
     defaultValue: z.any().optional(),
     description: z.string().trim().nullable().optional(),
-    icon: z.string().startsWith('Icon').trim().nullable(),
+    icon: z
+      .union([z.string().startsWith('Icon').trim(), z.literal('')])
+      .nullable()
+      .optional(),
     id: z.string().uuid(),
     isActive: z.boolean(),
     isCustom: z.boolean(),
     isNullable: z.boolean(),
     isUnique: z.boolean(),
     isSystem: z.boolean(),
+    isUIReadOnly: z.boolean(),
     label: metadataLabelSchema(existingLabels),
     isLabelSyncedWithName: z.boolean(),
     name: camelCaseStringSchema,

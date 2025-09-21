@@ -1,6 +1,6 @@
 import { FieldMetadataType } from 'twenty-shared/types';
 
-import { CompositeType } from 'src/engine/metadata-modules/field-metadata/interfaces/composite-type.interface';
+import { type CompositeType } from 'src/engine/metadata-modules/field-metadata/interfaces/composite-type.interface';
 
 export const emailsCompositeType: CompositeType = {
   type: FieldMetadataType.EMAILS,
@@ -23,5 +23,5 @@ export const emailsCompositeType: CompositeType = {
 
 export type EmailsMetadata = {
   primaryEmail: string;
-  additionalEmails: object | null;
+  additionalEmails: string[] | null;
 };

@@ -1,9 +1,10 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import axios from 'axios';
 
 import { AdminPanelService } from 'src/engine/core-modules/admin-panel/admin-panel.service';
+import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
 import {
   AuthException,
   AuthExceptionCode,
@@ -49,7 +50,7 @@ describe('AdminPanelService', () => {
       providers: [
         AdminPanelService,
         {
-          provide: getRepositoryToken(User, 'core'),
+          provide: getRepositoryToken(User),
           useValue: {
             findOne: UserFindOneMock,
           },
@@ -77,6 +78,14 @@ describe('AdminPanelService', () => {
               TwentyConfigServiceGetVariableWithMetadataMock,
           },
         },
+        {
+          provide: AuditService,
+          useValue: {
+            createContext: jest.fn().mockReturnValue({
+              insertWorkspaceEvent: jest.fn(),
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -91,7 +100,7 @@ describe('AdminPanelService', () => {
     const mockUser = {
       id: 'user-id',
       email: 'user@example.com',
-      workspaces: [
+      userWorkspaces: [
         {
           workspace: {
             id: 'workspace-id',
@@ -108,24 +117,30 @@ describe('AdminPanelService', () => {
       expiresAt: new Date(),
     });
 
-    const result = await service.impersonate('user-id', 'workspace-id');
+    const result = await service.impersonate(
+      'user-id',
+      'workspace-id',
+      'user-id',
+    );
 
     expect(UserFindOneMock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'user-id',
-          workspaces: {
+          userWorkspaces: {
             workspaceId: 'workspace-id',
             workspace: { allowImpersonation: true },
           },
         }),
-        relations: ['workspaces', 'workspaces.workspace'],
+        relations: { userWorkspaces: { workspace: true } },
       }),
     );
 
     expect(LoginTokenServiceGenerateLoginTokenMock).toHaveBeenCalledWith(
       'user@example.com',
       'workspace-id',
+      'impersonation',
+      { impersonatorUserId: 'user-id' },
     );
 
     expect(result).toEqual(
@@ -149,11 +164,11 @@ describe('AdminPanelService', () => {
     UserFindOneMock.mockReturnValueOnce(null);
 
     await expect(
-      service.impersonate('invalid-user-id', 'workspace-id'),
+      service.impersonate('invalid-user-id', 'workspace-id', 'user-id'),
     ).rejects.toThrow(
       new AuthException(
-        'User not found or impersonation not enable on workspace',
-        AuthExceptionCode.INVALID_INPUT,
+        'User not found in workspace or impersonation not enabled',
+        AuthExceptionCode.USER_WORKSPACE_NOT_FOUND,
       ),
     );
 
